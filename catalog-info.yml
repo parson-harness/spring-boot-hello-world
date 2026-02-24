@@ -1,0 +1,59 @@
+apiVersion: harness.io/v1
+kind: Component
+# Common types: service | library | docs | delegate
+type: service
+
+# Machine-friendly unique key
+identifier: spring_boot_hello_world
+
+# Human display name
+name: Spring Boot Hello World
+
+# Owner can be user or group (e.g., group:platform-team)
+owner: user:account/todd.parson@harness.io
+
+# Update the scope and org/project identifiers to match the Harness environment
+orgIdentifier: sandbox
+projectIdentifier: parson
+
+spec:
+  lifecycle: development
+  sourceCode:
+    provider: Github
+    repoName: harness-spring-boot-hello-world
+    connectorRef: parsonghharnessidpsandbox
+    branch: main
+    monoRepo: false
+    url: https://github.com/harness-idp-sandbox/harness-spring-boot-hello-world/tree/main
+metadata:
+  links:
+    - title: Website
+      url: http://harness.io #Update with your app website
+
+  annotations:
+    backstage.io/techdocs-ref: dir:.
+    # Helpful for plugins/deeplinks
+    github.com/project-slug: harness-spring-boot-hello-world
+    
+    #Grafana dashboards
+    grafana/dashboard-selector: "folderUrl == 'https://100.25.3.28.sslip.io/dashboards/f/bf34szb60u2gwe/harness'"
+    grafana/overview-dashboard: 'https://100.25.3.28.sslip.io/d/19a44328-b2d2-4fb2-bfa3-d379d069124a/jvm-micrometer?orgId=1&kiosk&var-application=spring-boot-hello-world'
+    
+    #Sonar dashboard
+    #Update if not using 'parson' Sonar instance
+    sonarqube.org/project-key: parson/harness-spring-boot-hello-world
+    
+    #Kubernetes dashboard
+    backstage.io/kubernetes-label-selector: 'app=springboothelloworld'
+    
+    #Harness CI/CD dashboard
+    harness.io/pipelines: |
+      Build and Deploy: https://app.harness.io/ng/account/EeRjnXTnS4GrLG5VNNJZUw/all/orgs/sandbox/projects/parson/pipelines/Java_App_Provisioner/pipeline-studio/?storeType=INLINE
+    
+    #Harness STO dashboard
+    #harness.io/sto-test-target:
+    #  - name: harness-idp-sandbox/harness-spring-boot-hello-world
+    #    scope: sandbox.parson
+
+  tags:
+  - java

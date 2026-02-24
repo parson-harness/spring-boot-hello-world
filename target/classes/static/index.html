@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Spring Boot Hello World</title>
+  <style>
+    :root { --bg:#0b1020; --card:#141b34; --text:#e8eefc; --muted:#96a0bd; --accent:#7aa2ff; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 800px at 10% -10%, #1a245c22, transparent), var(--bg); color: var(--text);
+      min-height: 100vh; display: grid; place-items: center; padding: 2rem;
+    }
+    .card {
+      width: 100%; max-width: 820px; background: linear-gradient(160deg, #10173a, #0f1430);
+      border: 1px solid #2a325a; border-radius: 20px; padding: 28px; box-shadow: 0 20px 50px #0006;
+    }
+    h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: .3px; }
+    .muted { color: var(--muted); }
+    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-top: 20px; }
+    .tile { background: var(--card); border: 1px solid #273056; padding: 16px; border-radius: 14px; }
+    .kicker { font-size: 12px; letter-spacing: .12em; color: var(--muted); text-transform: uppercase; }
+    a.btn {
+      display: inline-block; margin-top: 10px; padding: 10px 14px; border-radius: 999px; border: 1px solid #2b3563;
+      text-decoration: none; color: var(--text); background: #0f1533; transition: transform .05s ease;
+    }
+    a.btn:hover { transform: translateY(-1px); border-color: var(--accent); }
+    code { background: #0d1230; padding: 2px 6px; border-radius: 6px; }
+    footer { margin-top: 22px; font-size: 12px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Spring Boot Hello World</h1>
+    <div class="muted">A sample Java application built with Spring Boot</div>
+
+    <div class="grid">
+      <section class="tile">
+        <div class="kicker">Status</div>
+        <div>Health: <code id="health">checking…</code></div>
+        <div>Pod: <code id="pod">unknown</code></div>
+        <a class="btn" href="/actuator/health">Open /actuator/health</a>
+      </section>
+
+      <section class="tile">
+        <div class="kicker">API</div>
+        <div>Sample JSON at <code>/api</code></div>
+        <a class="btn" href="/api">Open /api</a>
+      </section>
+
+      <section class="tile">
+        <div class="kicker">Docs</div>
+        <div>Swagger UI generated from code.</div>
+        <a class="btn" href="/swagger-ui.html">Open Swagger</a>
+      </section>
+
+      <section class="tile">
+        <div class="kicker">Build</div>
+        <div>Version: <code id="version">n/a</code></div>
+        <div>Commit: <code id="commit">n/a</code></div>
+        <div>Built: <code id="time">n/a</code></div>
+        <a class="btn" href="/actuator/info">Open /actuator/info</a>
+      </section>
+
+      <section class="tile">
+        <div class="kicker">Metrics</div>
+        <div>Prometheus scrape endpoint</div>
+        <a class="btn" href="/actuator/prometheus">Open /actuator/prometheus</a>
+      </section>
+
+    </div>
+
+    <footer>Deployed via Harness IDP in minutes ✨</footer>
+  </main>
+
+  <script>
+    // basic client-side fetch to show live data; safe for a PoV
+    fetch('/actuator/health').then(r => r.json()).then(j => {
+      document.getElementById('health').textContent = j.status || JSON.stringify(j);
+    }).catch(()=>{});
+    fetch('/api').then(r => r.json()).then(j => {
+      if (j.pod) document.getElementById('pod').textContent = j.pod;
+    }).catch(()=>{});
+    fetch('/actuator/info').then(r => r.json()).then(j => {
+      const v = j.build && j.build.version || 'n/a';
+      const c = j.git && j.git.commit && j.git.commit.id && j.git.commit.id.abbrev || 'n/a';
+      const t = j.build && j.build.time || 'n/a';
+      document.getElementById('version').textContent = v;
+      document.getElementById('commit').textContent = c;
+      document.getElementById('time').textContent = t;
+    }).catch(()=>{});
+  </script>
+</body>
+</html>

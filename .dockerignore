@@ -1,0 +1,6 @@
+# .dockerignore
+**
+!target/*.jar
+!Dockerfile
+!kubernetes/**
+!README.md

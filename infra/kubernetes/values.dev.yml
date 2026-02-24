@@ -1,0 +1,20 @@
+name: {{ cookiecutter.project_slug }}
+namespace: {{ cookiecutter.k8s_namespace }}
+replicas: 2
+
+image:
+  full: "{{ cookiecutter.docker_registry }}/{{ cookiecutter.docker_image_name }}:latest"
+  pullPolicy: Always
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080

@@ -1,0 +1,84 @@
+{{- if .Values.dockercfg }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ lower .Values.name }}-dockercfg
+  namespace: {{ .Values.namespace }}
+  annotations:
+    harness.io/skip-versioning: "true"
+type: kubernetes.io/dockercfg
+data:
+  .dockercfg: {{ .Values.dockercfg }}
+---
+{{- end }}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ lower .Values.name }}-deployment
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ lower .Values.name }}
+    {{- if .Values.service_identifier }}
+    harness.io/serviceIdentifier: {{ .Values.service_identifier | quote }}
+    {{- end }}
+    {{- if .Values.env_identifier }}
+    harness.io/envIdentifier: {{ .Values.env_identifier | quote }}
+    {{- end }}
+spec:
+  replicas: {{ .Values.replicas | default 2 }}
+  selector:
+    matchLabels:
+      app: {{ lower .Values.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ lower .Values.name }}
+        {{- if .Values.service_identifier }}
+        harness.io/serviceIdentifier: {{ .Values.service_identifier | quote }}
+        {{- end }}
+        {{- if .Values.env_identifier }}
+        harness.io/envIdentifier: {{ .Values.env_identifier | quote }}
+        {{- end }}
+    spec:
+      {{- if or .Values.dockercfgjson .Values.dockercfg }}
+      imagePullSecrets:
+        - name: {{ lower .Values.name }}-dockercfg
+      {{- end }}
+      containers:
+        - name: {{ lower .Values.name }}
+          image: {{ .Values.image | quote }}                # e.g. <+artifact.image>
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: {{ .Values.resources.requests.cpu | default "100m" }}
+              memory: {{ .Values.resources.requests.memory | default "256Mi" }}
+            limits:
+              cpu: {{ .Values.resources.limits.cpu | default "500m" }}
+              memory: {{ .Values.resources.limits.memory | default "512Mi" }}
+          readinessProbe:
+            httpGet: { path: /actuator/health, port: 8080 }
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /actuator/health, port: 8080 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          env:
+            - name: JAVA_OPTS
+              value: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: POD_NAMESPACE
+              valueFrom: { fieldRef: { fieldPath: metadata.namespace } }
+            {{- if .Values.build_commit_sha }}
+            - name: BUILD_COMMIT_SHA
+              value: "{{ .Values.build_commit_sha }}"
+            {{- end }}

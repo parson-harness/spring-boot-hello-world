@@ -1,0 +1,9 @@
+site_name: 'Documentation Template'
+repo_url: https://github.com/harness-idp-sandbox/harness-spring-boot-hello-world
+edit_uri: https://github.com/harness-idp-sandbox/harness-spring-boot-hello-world/blob/main/docs/index.md
+
+nav:
+  - Home: index.md
+
+plugins:
+  - techdocs-core

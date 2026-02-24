@@ -1,0 +1,30 @@
+# Name & namespace
+name: <+service.name.replace(" ", "")>
+namespace: <+infra.namespace>
+
+replicas: 2
+
+# Harness provides the full image string (registry/repo:tag)
+image: <+artifact.image>                    # Popluated by Harness CD service definition
+dockercfg: <+artifact.imagePullSecret>      # Managed by Harness CD
+service_identifier: <+service.identifier>
+env_identifier: <+env.identifier>
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+service:
+  type: LoadBalancer
+  port: 80
+  targetPort: 8080
+
+serviceMonitor:
+  enabled: true
+  toolsNamespace: tools
+  releaseLabel: monitoring
+  scrapeInterval: 15s

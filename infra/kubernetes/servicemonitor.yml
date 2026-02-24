@@ -1,0 +1,21 @@
+# kubernetes/servicemonitor.yml
+{{- if .Values.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ lower .Values.name }}
+  namespace: {{ .Values.serviceMonitor.toolsNamespace | default "tools" }}
+  labels:
+    release: {{ .Values.serviceMonitor.releaseLabel | default "monitoring" }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ lower .Values.name }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Values.namespace }}
+  endpoints:
+    - port: http
+      path: /actuator/prometheus
+      interval: {{ .Values.serviceMonitor.scrapeInterval | default "15s" }}
+{{- end }}
