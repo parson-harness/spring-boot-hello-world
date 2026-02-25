@@ -57,3 +57,9 @@ variable "jar_file_key" {
   type        = string
   default     = "spring-boot-hello-world-1.0-SNAPSHOT.jar"
 }
+
+variable "owner" {
+  description = "Owner of the resources (SE last name for POVs)"
+  type        = string
+  default     = "unknown"
+}

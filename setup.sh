@@ -15,6 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # PROJECT CONFIGURATION - Change this for your POV
 # =============================================================================
 PROJECT_NAME="${PROJECT_NAME:-spring-boot-hello-world}"
+OWNER="${OWNER:-unknown}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 ENVIRONMENT="${ENVIRONMENT:-dev}"
 
@@ -154,7 +155,7 @@ deploy_infrastructure() {
     fi
     
     terraform init -input=false > /dev/null
-    terraform apply -auto-approve -input=false -var "app_name=$PROJECT_NAME" -var "environment=$ENVIRONMENT" -var "aws_region=$AWS_REGION"
+    terraform apply -auto-approve -input=false -var "app_name=$PROJECT_NAME" -var "environment=$ENVIRONMENT" -var "aws_region=$AWS_REGION" -var "owner=$OWNER"
     
     echo -e "${GREEN}✓ Infrastructure deployed${NC}"
     echo ""
@@ -490,12 +491,13 @@ main() {
             echo ""
             echo "Environment Variables:"
             echo "  PROJECT_NAME   Unique name for your project (default: spring-boot-hello-world)"
+            echo "  OWNER          Your last name - used as AWS resource tag (default: unknown)"
             echo "  AWS_REGION     AWS region to deploy to (default: us-east-1)"
             echo "  ENVIRONMENT    Environment name (default: dev)"
             echo ""
             echo "Examples:"
             echo "  ./setup.sh                                    # Full deployment with defaults"
-            echo "  PROJECT_NAME=my-app ./setup.sh                # Deploy with custom project name"
+            echo "  PROJECT_NAME=acme-demo OWNER=parson ./setup.sh # Deploy with custom name and owner"
             echo "  ./setup.sh config                             # Just get the Harness config values"
             echo "  ./setup.sh destroy                            # Clean up everything"
             ;;

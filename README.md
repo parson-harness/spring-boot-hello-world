@@ -50,16 +50,21 @@ When you fork this repo for a customer POV:
 git clone https://github.com/YOUR-ORG/spring-boot-hello-world.git
 cd spring-boot-hello-world
 
-# 3. Deploy with a unique project name
-PROJECT_NAME=customer-demo ./setup.sh
+# 3. Deploy with your name and a unique project name
+PROJECT_NAME=acme-demo OWNER=smith ./setup.sh
 
 # 4. Commit the auto-generated configs
 git add infra/harness/asg/*.json harness-config.txt
-git commit -m "Configure for customer-demo"
+git commit -m "Configure for acme-demo"
 git push
 ```
 
-The `PROJECT_NAME` variable ensures all AWS resources (ALB, ASG, Target Groups, etc.) have unique names, preventing conflicts when multiple SEs run POVs in the same AWS account.
+| Variable | Purpose |
+|----------|---------|
+| `PROJECT_NAME` | Unique prefix for all AWS resources (ALB, ASG, etc.) |
+| `OWNER` | Your last name - tagged on all AWS resources for easy identification |
+
+All AWS resources will be tagged with `Owner=smith` so you can easily find and clean up your resources in the AWS Console.
 
 ---
 

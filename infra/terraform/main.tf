@@ -20,6 +20,15 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
+
+  default_tags {
+    tags = {
+      Project     = var.app_name
+      Environment = var.environment
+      Owner       = var.owner
+      ManagedBy   = "terraform"
+    }
+  }
 }
 
 data "aws_availability_zones" "available" {
