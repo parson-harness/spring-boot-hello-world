@@ -1,0 +1,16 @@
+[
+  {
+    "PolicyName": "scale-up",
+    "PolicyType": "SimpleScaling",
+    "AdjustmentType": "ChangeInCapacity",
+    "ScalingAdjustment": 1,
+    "Cooldown": 300
+  },
+  {
+    "PolicyName": "scale-down",
+    "PolicyType": "SimpleScaling",
+    "AdjustmentType": "ChangeInCapacity",
+    "ScalingAdjustment": -1,
+    "Cooldown": 300
+  }
+]

@@ -1,0 +1,68 @@
+service:
+  name: spring-boot-hello-world-asg
+  identifier: spring_boot_hello_world_asg
+  serviceDefinition:
+    type: Asg
+    spec:
+      manifests:
+        - manifest:
+            identifier: launchTemplate
+            type: AsgLaunchTemplate
+            spec:
+              store:
+                type: Github
+                spec:
+                  connectorRef: <+input>
+                  gitFetchType: Branch
+                  paths:
+                    - infra/harness/asg/launch-template.json
+                  branch: main
+        - manifest:
+            identifier: asgConfiguration
+            type: AsgConfiguration
+            spec:
+              store:
+                type: Github
+                spec:
+                  connectorRef: <+input>
+                  gitFetchType: Branch
+                  paths:
+                    - infra/harness/asg/asg-config.json
+                  branch: main
+        - manifest:
+            identifier: scalingPolicy
+            type: AsgScalingPolicy
+            spec:
+              store:
+                type: Github
+                spec:
+                  connectorRef: <+input>
+                  gitFetchType: Branch
+                  paths:
+                    - infra/harness/asg/scaling-policy.json
+                  branch: main
+        - manifest:
+            identifier: userData
+            type: AsgUserData
+            spec:
+              store:
+                type: Github
+                spec:
+                  connectorRef: <+input>
+                  gitFetchType: Branch
+                  paths:
+                    - infra/harness/asg/user-data.sh
+                  branch: main
+      artifacts:
+        primary:
+          primaryArtifactRef: <+input>
+          sources:
+            - identifier: springBootAmi
+              type: AmazonMachineImage
+              spec:
+                connectorRef: <+input>
+                region: us-east-1
+                filters:
+                  - name: tag:Application
+                    value: spring-boot-hello-world
+                version: <+input>

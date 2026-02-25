@@ -1,0 +1,10 @@
+infrastructureDefinition:
+  name: aws-asg-infra
+  identifier: aws_asg_infra
+  orgIdentifier: <+input>
+  projectIdentifier: <+input>
+  environmentRef: dev
+  type: Asg
+  spec:
+    connectorRef: <+input>
+    region: us-east-1

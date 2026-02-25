@@ -1,6 +1,6 @@
 # Spring Boot Hello World
 
-A sample Java application built with Spring Boot
+A sample Java application built with Spring Boot, with AWS ASG infrastructure and Harness Blue-Green deployment support.
 
 ---
 
@@ -11,8 +11,30 @@ A sample Java application built with Spring Boot
 - JSON API at `/api` and health at `/health`
 - Swagger UI at `/swagger-ui.html`
 - Build & commit metadata at `/actuator/info`
+- **AWS Infrastructure** (Terraform): VPC, ALB, ASG with Blue-Green support
+- **Harness CD**: ASG Blue-Green deployment with traffic shifting
 - Kubernetes manifests (Deployment + Service) ready for EKS
 - Docker image that runs on Linux/amd64
+
+---
+
+## 🚀 Quick Start (AWS ASG Deployment)
+
+For a complete AWS ASG deployment with Harness Blue-Green support:
+
+```bash
+# Run the setup script
+./setup.sh
+```
+
+This will:
+1. Build the application JAR
+2. Deploy Terraform state backend (S3 + DynamoDB)
+3. Deploy AWS infrastructure (VPC, ALB, ASG, S3)
+4. Upload the JAR to S3
+5. Output the ALB DNS and Harness configuration values
+
+See [infra/README.md](infra/README.md) for detailed infrastructure documentation.
 
 ---
 
@@ -20,8 +42,10 @@ A sample Java application built with Spring Boot
 
 - JDK 11
 - Maven 3.8+
-- Docker (with `buildx`)
-- kubectl connected to a cluster (EKS or compatible)
+- Terraform >= 1.0
+- AWS CLI configured with appropriate credentials
+- Docker (with `buildx`) - for Kubernetes deployment
+- kubectl connected to a cluster (EKS or compatible) - for Kubernetes deployment
 
 ---
 
@@ -47,6 +71,40 @@ Endpoints:
 
 ---
 
+## ☁️ AWS ASG Deployment
+
+### Manual Deployment
+
+```bash
+# 1. Build the application
+mvn clean package -DskipTests
+
+# 2. Deploy Terraform state backend
+cd infra/terraform-bootstrap
+terraform init && terraform apply
+
+# 3. Deploy main infrastructure
+cd ../terraform
+terraform init && terraform apply
+
+# 4. Upload JAR to S3
+aws s3 cp ../../target/spring-boot-hello-world-1.0-SNAPSHOT.jar s3://$(terraform output -raw s3_bucket_name)/
+
+# 5. Access the application
+echo "App URL: http://$(terraform output -raw alb_dns_name)"
+```
+
+### Harness Blue-Green Deployment
+
+The infrastructure supports Harness ASG Blue-Green deployment with traffic shifting:
+- Two target groups (prod + stage) for weighted traffic distribution
+- Listener rule supporting incremental traffic shifts
+- Sample pipeline with 10% → 50% → 100% traffic progression
+
+See [infra/README.md](infra/README.md) for Harness setup instructions.
+
+---
+
 ## 🐳 Build & Push Docker Image
 
 The runtime image expects the fat jar to be present (built with the command above). The Dockerfile copies the jar and runs `java -jar`.
@@ -56,7 +114,7 @@ The runtime image expects the fat jar to be present (built with the command abov
 docker buildx build   --platform linux/amd64   -t parsontodd/spring-boot-hello-world:latest   --push .
 ```
 
-> Tip: If you’re using a private registry, make sure your cluster has the right imagePullSecret.
+> Tip: If you're using a private registry, make sure your cluster has the right imagePullSecret.
 
 ---
 
@@ -137,7 +195,7 @@ mvn test
 
 ```
 spring-boot-hello-world/
-├─ src/
+├─ src/                              # Application source code
 │  ├─ main/
 │  │  ├─ java/com/harness/springboothelloworld/
 │  │  │  ├─ App.java
@@ -147,9 +205,14 @@ spring-boot-hello-world/
 │  │        └─ index.html
 │  └─ test/
 │     └─ java/com/harness/springboothelloworld/AppTest.java
-├─ kubernetes/
-│  ├─ deployment.yml
-│  └─ service.yml
+├─ infra/                            # Infrastructure as Code
+│  ├─ terraform-bootstrap/           # Terraform state backend (S3 + DynamoDB)
+│  ├─ terraform/                     # Main AWS infrastructure (VPC, ALB, ASG)
+│  ├─ harness/
+│  │  ├─ asg/                        # Harness ASG Blue-Green configs
+│  │  └─ service/                    # Harness Kubernetes service configs
+│  └─ kubernetes/                    # Kubernetes manifests
+├─ setup.sh                          # One-command deployment script
 ├─ Dockerfile
 └─ pom.xml
 ```

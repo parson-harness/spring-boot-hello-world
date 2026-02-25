@@ -1,0 +1,23 @@
+{
+  "AutoScalingGroupName": "spring-boot-hello-world-asg",
+  "MinSize": 1,
+  "MaxSize": 3,
+  "DesiredCapacity": 2,
+  "DefaultCooldown": 300,
+  "HealthCheckType": "ELB",
+  "HealthCheckGracePeriod": 300,
+  "VPCZoneIdentifier": "${SUBNET_IDS}",
+  "TargetGroupARNs": ["${TARGET_GROUP_ARN}"],
+  "Tags": [
+    {
+      "Key": "Name",
+      "Value": "spring-boot-hello-world",
+      "PropagateAtLaunch": true
+    },
+    {
+      "Key": "Environment",
+      "Value": "${ENVIRONMENT}",
+      "PropagateAtLaunch": true
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+environment:
+  name: dev
+  identifier: dev
+  type: PreProduction
+  orgIdentifier: <+input>
+  projectIdentifier: <+input>
+  variables: []

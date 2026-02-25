@@ -1,0 +1,105 @@
+pipeline:
+  name: ASG Blue-Green Traffic Shift
+  identifier: asg_blue_green_traffic_shift
+  projectIdentifier: <+input>
+  orgIdentifier: <+input>
+  tags: {}
+  stages:
+    - stage:
+        name: Deploy to Dev
+        identifier: deploy_to_dev
+        type: Deployment
+        spec:
+          deploymentType: Asg
+          service:
+            serviceRef: spring_boot_hello_world_asg
+          environment:
+            environmentRef: dev
+            infrastructureDefinitions:
+              - identifier: aws_asg_infra
+          execution:
+            steps:
+              - stepGroup:
+                  name: Blue Green Deployment
+                  identifier: blueGreenDeployment
+                  steps:
+                    - step:
+                        name: ASG Blue Green Deploy
+                        identifier: AsgBlueGreenDeploy
+                        type: AsgBlueGreenDeploy
+                        timeout: 15m
+                        spec:
+                          useAlreadyRunningInstances: false
+                          instances:
+                            type: Fixed
+                            spec:
+                              min: 1
+                              max: 3
+                              desired: 2
+                          loadBalancers:
+                            - loadBalancer: spring-boot-hello-world-alb
+                              prodListener: <+input>
+                              prodListenerRuleArn: <+input>
+                              useTrafficShift: true
+                    - step:
+                        name: Traffic Shift 10%
+                        identifier: trafficShift10
+                        type: AsgTrafficShift
+                        timeout: 10m
+                        spec:
+                          newAutoscalingGroupWeight: 10
+                    - step:
+                        name: Approval - 10% Traffic
+                        identifier: approval10
+                        type: HarnessApproval
+                        timeout: 1d
+                        spec:
+                          approvalMessage: "10% traffic shifted to new ASG. Approve to continue to 50%."
+                          includePipelineExecutionHistory: true
+                          approvers:
+                            userGroups:
+                              - <+input>
+                            minimumCount: 1
+                            disallowPipelineExecutor: false
+                    - step:
+                        name: Traffic Shift 50%
+                        identifier: trafficShift50
+                        type: AsgTrafficShift
+                        timeout: 10m
+                        spec:
+                          newAutoscalingGroupWeight: 50
+                    - step:
+                        name: Approval - 50% Traffic
+                        identifier: approval50
+                        type: HarnessApproval
+                        timeout: 1d
+                        spec:
+                          approvalMessage: "50% traffic shifted to new ASG. Approve to complete deployment."
+                          includePipelineExecutionHistory: true
+                          approvers:
+                            userGroups:
+                              - <+input>
+                            minimumCount: 1
+                            disallowPipelineExecutor: false
+                    - step:
+                        name: Traffic Shift 100%
+                        identifier: trafficShift100
+                        type: AsgTrafficShift
+                        timeout: 10m
+                        spec:
+                          newAutoscalingGroupWeight: 100
+                          downsizeOldAsg: true
+            rollbackSteps:
+              - step:
+                  name: ASG Blue Green Rollback
+                  identifier: AsgBlueGreenRollback
+                  type: AsgBlueGreenRollback
+                  timeout: 10m
+                  spec: {}
+        tags: {}
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback

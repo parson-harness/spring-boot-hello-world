@@ -1,0 +1,10 @@
+aws_region       = "us-east-1"
+app_name         = "spring-boot-hello-world"
+environment      = "dev"
+instance_type    = "t3.micro"
+min_size         = 1
+max_size         = 3
+desired_capacity = 2
+app_port         = 8080
+vpc_cidr         = "10.0.0.0/16"
+jar_file_key     = "spring-boot-hello-world-1.0-SNAPSHOT.jar"

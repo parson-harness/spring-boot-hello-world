@@ -1,0 +1,5 @@
+aws_region      = "us-east-1"
+instance_type   = "t3.micro"
+ami_name_prefix = "spring-boot-hello-world"
+app_version     = "1.0-SNAPSHOT"
+jar_path        = "../../target/spring-boot-hello-world-1.0-SNAPSHOT.jar"

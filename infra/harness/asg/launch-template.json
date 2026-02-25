@@ -1,0 +1,30 @@
+{
+  "LaunchTemplateData": {
+    "InstanceType": "t3.micro",
+    "BlockDeviceMappings": [
+      {
+        "DeviceName": "/dev/xvda",
+        "Ebs": {
+          "VolumeSize": 20,
+          "VolumeType": "gp3",
+          "DeleteOnTermination": true
+        }
+      }
+    ],
+    "TagSpecifications": [
+      {
+        "ResourceType": "instance",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "spring-boot-hello-world"
+          },
+          {
+            "Key": "Application",
+            "Value": "spring-boot-hello-world"
+          }
+        ]
+      }
+    ]
+  }
+}
