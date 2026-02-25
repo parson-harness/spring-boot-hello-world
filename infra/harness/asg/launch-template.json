@@ -1,6 +1,7 @@
 {
   "LaunchTemplateData": {
     "InstanceType": "t3.micro",
+    "SecurityGroupIds": ["sg-0b1cd04640f32af61"],
     "BlockDeviceMappings": [
       {
         "DeviceName": "/dev/xvda",
