@@ -2,12 +2,11 @@
   "AutoScalingGroupName": "spring-boot-hello-world-asg",
   "MinSize": 1,
   "MaxSize": 3,
-  "DesiredCapacity": 2,
+  "DesiredCapacity": 1,
   "DefaultCooldown": 300,
   "HealthCheckType": "ELB",
   "HealthCheckGracePeriod": 300,
-  "VPCZoneIdentifier": "${SUBNET_IDS}",
-  "TargetGroupARNs": ["${TARGET_GROUP_ARN}"],
+  "VPCZoneIdentifier": "subnet-04da954c7917f3803,subnet-08622d1e1d6647d88",
   "Tags": [
     {
       "Key": "Name",
@@ -16,7 +15,7 @@
     },
     {
       "Key": "Environment",
-      "Value": "${ENVIRONMENT}",
+      "Value": "dev",
       "PropagateAtLaunch": true
     }
   ]
