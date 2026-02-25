@@ -11,6 +11,13 @@ NC='\033[0m' # No Color
 # Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# =============================================================================
+# PROJECT CONFIGURATION - Change this for your POV
+# =============================================================================
+PROJECT_NAME="${PROJECT_NAME:-spring-boot-hello-world}"
+AWS_REGION="${AWS_REGION:-us-east-1}"
+ENVIRONMENT="${ENVIRONMENT:-dev}"
+
 # Install Packer (macOS via Homebrew, Linux via apt/yum)
 install_packer() {
     if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -147,7 +154,7 @@ deploy_infrastructure() {
     fi
     
     terraform init -input=false > /dev/null
-    terraform apply -auto-approve -input=false
+    terraform apply -auto-approve -input=false -var "app_name=$PROJECT_NAME" -var "environment=$ENVIRONMENT" -var "aws_region=$AWS_REGION"
     
     echo -e "${GREEN}✓ Infrastructure deployed${NC}"
     echo ""
@@ -162,12 +169,16 @@ build_ami() {
     packer init spring-boot-ami.pkr.hcl > /dev/null 2>&1 || true
     
     # Build the AMI
-    packer build -var "jar_path=$SCRIPT_DIR/target/spring-boot-hello-world-1.0-SNAPSHOT.jar" spring-boot-ami.pkr.hcl
+    packer build \
+        -var "jar_path=$SCRIPT_DIR/target/spring-boot-hello-world-1.0-SNAPSHOT.jar" \
+        -var "ami_name_prefix=$PROJECT_NAME" \
+        -var "aws_region=$AWS_REGION" \
+        spring-boot-ami.pkr.hcl
     
     # Get the AMI ID from the manifest or output
     AMI_ID=$(aws ec2 describe-images \
         --owners self \
-        --filters "Name=tag:Application,Values=spring-boot-hello-world" \
+        --filters "Name=tag:Application,Values=$PROJECT_NAME" \
         --query 'sort_by(Images, &CreationDate)[-1].ImageId' \
         --output text)
     
@@ -224,31 +235,46 @@ print_outputs() {
     # Save Harness config to file
     save_harness_config "$AMI_ID" "$ALB_DNS" "$S3_BUCKET" "$PROD_LISTENER" "$LISTENER_RULE"
     
-    # Update ASG config with actual subnet IDs
-    update_asg_config
+    # Update Harness manifests with infrastructure values
+    update_harness_manifests
 }
 
-# Update ASG config with actual subnet IDs from Terraform
-update_asg_config() {
-    echo -e "${YELLOW}Updating ASG config with subnet IDs...${NC}"
+# Update Harness ASG manifests with actual values from Terraform
+update_harness_manifests() {
+    echo -e "${YELLOW}Updating Harness manifests with infrastructure values...${NC}"
     
     cd "$SCRIPT_DIR/infra/terraform"
     
-    # Get subnet IDs from Terraform output
+    # Get values from Terraform output
     SUBNET_IDS=$(terraform output -json private_subnet_ids 2>/dev/null | jq -r 'join(",")' || echo "")
+    SECURITY_GROUP=$(terraform output -raw app_security_group_id 2>/dev/null || echo "")
     
     if [ -z "$SUBNET_IDS" ]; then
         echo -e "${YELLOW}Warning: Could not get subnet IDs from Terraform${NC}"
-        return
     fi
     
-    # Update the ASG config file
+    if [ -z "$SECURITY_GROUP" ]; then
+        echo -e "${YELLOW}Warning: Could not get security group from Terraform${NC}"
+    fi
+    
+    # Update ASG config with subnet IDs
     local asg_config="$SCRIPT_DIR/infra/harness/asg/asg-config.json"
+    if [ -n "$SUBNET_IDS" ]; then
+        jq --arg subnets "$SUBNET_IDS" --arg name "$PROJECT_NAME-asg" \
+            '.VPCZoneIdentifier = $subnets | .AutoScalingGroupName = $name' \
+            "$asg_config" > "$asg_config.tmp" && mv "$asg_config.tmp" "$asg_config"
+        echo -e "${GREEN}✓ ASG config updated with subnet IDs${NC}"
+    fi
     
-    # Use jq to update the VPCZoneIdentifier
-    jq --arg subnets "$SUBNET_IDS" '.VPCZoneIdentifier = $subnets' "$asg_config" > "$asg_config.tmp" && mv "$asg_config.tmp" "$asg_config"
+    # Update launch template with security group
+    local launch_template="$SCRIPT_DIR/infra/harness/asg/launch-template.json"
+    if [ -n "$SECURITY_GROUP" ]; then
+        jq --arg sg "$SECURITY_GROUP" --arg name "$PROJECT_NAME" \
+            '.LaunchTemplateData.SecurityGroupIds = [$sg] | .LaunchTemplateData.TagSpecifications[0].Tags[0].Value = $name | .LaunchTemplateData.TagSpecifications[0].Tags[1].Value = $name' \
+            "$launch_template" > "$launch_template.tmp" && mv "$launch_template.tmp" "$launch_template"
+        echo -e "${GREEN}✓ Launch template updated with security group${NC}"
+    fi
     
-    echo -e "${GREEN}✓ ASG config updated with subnet IDs: $SUBNET_IDS${NC}"
     echo ""
 }
 
@@ -272,13 +298,13 @@ save_harness_config() {
 # =============================================================================
 AMI_ID=$ami_id
 AMI_REGION=us-east-1
-AMI_TAG_FILTER=Application=spring-boot-hello-world
+AMI_TAG_FILTER=Application=$PROJECT_NAME
 
 # =============================================================================
 # ASG Blue Green Deploy Step
 # =============================================================================
-ASG_NAME=spring-boot-hello-world-asg
-LOAD_BALANCER=spring-boot-hello-world-alb
+ASG_NAME=$PROJECT_NAME-asg
+LOAD_BALANCER=$PROJECT_NAME-alb
 PROD_LISTENER_ARN=$prod_listener
 WEIGHTED_LISTENER_RULE_ARN=$listener_rule
 
@@ -300,8 +326,8 @@ S3_BUCKET=$s3_bucket
 # 3. Environment: Region=us-east-1
 # 4. Pipeline: Blue Green strategy with traffic shifting
 # 5. ASG Blue Green Deploy Step:
-#    - ASG Name: spring-boot-hello-world-asg
-#    - Load Balancer: spring-boot-hello-world-alb
+#    - ASG Name: $PROJECT_NAME-asg
+#    - Load Balancer: $PROJECT_NAME-alb
 #    - Prod Listener ARN: (see above)
 #    - Listener Rule ARN: (see above)
 #    - Enable "Use Shift Traffic"
@@ -406,13 +432,16 @@ fetch_config() {
     
     AMI_ID=$(aws ec2 describe-images \
         --owners self \
-        --filters "Name=tag:Application,Values=spring-boot-hello-world" \
+        --filters "Name=tag:Application,Values=$PROJECT_NAME" \
         --query 'sort_by(Images, &CreationDate)[-1].ImageId' \
         --output text 2>/dev/null || echo "N/A")
     
     echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
     echo -e "${BLUE}║              Harness Configuration Values                  ║${NC}"
     echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${GREEN}Project Name:${NC}"
+    echo -e "  $PROJECT_NAME"
     echo ""
     echo -e "${GREEN}AMI ID:${NC}"
     echo -e "  $AMI_ID"
@@ -421,10 +450,10 @@ fetch_config() {
     echo -e "  http://$ALB_DNS"
     echo ""
     echo -e "${GREEN}ASG Name:${NC}"
-    echo -e "  spring-boot-hello-world-asg"
+    echo -e "  $PROJECT_NAME-asg"
     echo ""
     echo -e "${GREEN}Load Balancer:${NC}"
-    echo -e "  spring-boot-hello-world-alb"
+    echo -e "  $PROJECT_NAME-alb"
     echo ""
     echo -e "${GREEN}Prod Listener ARN:${NC}"
     echo -e "  $PROD_LISTENER"
@@ -436,8 +465,9 @@ fetch_config() {
     echo -e "  $S3_BUCKET"
     echo ""
     
-    # Save to file
+    # Save to file and update manifests
     save_harness_config "$AMI_ID" "$ALB_DNS" "$S3_BUCKET" "$PROD_LISTENER" "$LISTENER_RULE"
+    update_harness_manifests
 }
 
 # Main execution
@@ -458,10 +488,16 @@ main() {
             echo "  destroy    Tear down all AWS resources"
             echo "  help       Show this help message"
             echo ""
+            echo "Environment Variables:"
+            echo "  PROJECT_NAME   Unique name for your project (default: spring-boot-hello-world)"
+            echo "  AWS_REGION     AWS region to deploy to (default: us-east-1)"
+            echo "  ENVIRONMENT    Environment name (default: dev)"
+            echo ""
             echo "Examples:"
-            echo "  ./setup.sh           # Full deployment"
-            echo "  ./setup.sh config    # Just get the Harness config values"
-            echo "  ./setup.sh destroy   # Clean up everything"
+            echo "  ./setup.sh                                    # Full deployment with defaults"
+            echo "  PROJECT_NAME=my-app ./setup.sh                # Deploy with custom project name"
+            echo "  ./setup.sh config                             # Just get the Harness config values"
+            echo "  ./setup.sh destroy                            # Clean up everything"
             ;;
         *)
             check_prereqs

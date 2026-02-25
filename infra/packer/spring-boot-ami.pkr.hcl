@@ -51,7 +51,7 @@ source "amazon-ebs" "spring-boot" {
 
   tags = {
     Name        = "${var.ami_name_prefix}-${var.app_version}"
-    Application = "spring-boot-hello-world"
+    Application = var.ami_name_prefix
     Version     = var.app_version
     BuildTime   = "{{timestamp}}"
   }

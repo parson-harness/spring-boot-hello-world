@@ -23,18 +23,43 @@ A sample Java application built with Spring Boot, with AWS ASG infrastructure an
 For a complete AWS ASG deployment with Harness Blue-Green support:
 
 ```bash
-# Run the setup script
+# Run the setup script (uses default project name)
 ./setup.sh
+
+# Or use a custom project name for your POV
+PROJECT_NAME=acme-demo ./setup.sh
 ```
 
 This will:
 1. Build the application JAR
 2. Deploy Terraform state backend (S3 + DynamoDB)
 3. Deploy AWS infrastructure (VPC, ALB, ASG, S3)
-4. Upload the JAR to S3
-5. Output the ALB DNS and Harness configuration values
+4. Build AMI with Packer (app baked in)
+5. Auto-populate Harness manifests with infrastructure values
+6. Output the ALB DNS and Harness configuration values
 
 See [infra/README.md](infra/README.md) for detailed infrastructure documentation.
+
+### 🍴 Forking for Your POV
+
+When you fork this repo for a customer POV:
+
+```bash
+# 1. Fork the repo
+# 2. Clone your fork
+git clone https://github.com/YOUR-ORG/spring-boot-hello-world.git
+cd spring-boot-hello-world
+
+# 3. Deploy with a unique project name
+PROJECT_NAME=customer-demo ./setup.sh
+
+# 4. Commit the auto-generated configs
+git add infra/harness/asg/*.json harness-config.txt
+git commit -m "Configure for customer-demo"
+git push
+```
+
+The `PROJECT_NAME` variable ensures all AWS resources (ALB, ASG, Target Groups, etc.) have unique names, preventing conflicts when multiple SEs run POVs in the same AWS account.
 
 ---
 
@@ -43,6 +68,7 @@ See [infra/README.md](infra/README.md) for detailed infrastructure documentation
 - JDK 11
 - Maven 3.8+
 - Terraform >= 1.0
+- Packer >= 1.8
 - AWS CLI configured with appropriate credentials
 - Docker (with `buildx`) - for Kubernetes deployment
 - kubectl connected to a cluster (EKS or compatible) - for Kubernetes deployment

@@ -36,11 +36,12 @@
     <div class="muted">A sample Java application built with Spring Boot</div>
 
     <div class="grid">
-      <section class="tile">
-        <div class="kicker">Status</div>
+      <section class="tile" id="version-tile">
+        <div class="kicker">Instance</div>
+        <div>Version: <code id="app-version">loading…</code></div>
+        <div>Instance: <code id="instance-id">loading…</code></div>
         <div>Health: <code id="health">checking…</code></div>
-        <div>Pod: <code id="pod">unknown</code></div>
-        <a class="btn" href="/actuator/health">Open /actuator/health</a>
+        <a class="btn" href="/api">Open /api</a>
       </section>
 
       <section class="tile">
@@ -80,7 +81,19 @@
       document.getElementById('health').textContent = j.status || JSON.stringify(j);
     }).catch(()=>{});
     fetch('/api').then(r => r.json()).then(j => {
-      if (j.pod) document.getElementById('pod').textContent = j.pod;
+      if (j.version) {
+        document.getElementById('app-version').textContent = j.version;
+        // Color the tile based on version for visual blue/green differentiation
+        const tile = document.getElementById('version-tile');
+        if (j.version.includes('blue') || j.version.includes('1.0')) {
+          tile.style.borderColor = '#3b82f6';
+          tile.style.background = 'linear-gradient(135deg, #1e3a5f 0%, #0f1430 100%)';
+        } else if (j.version.includes('green') || j.version.includes('2.0')) {
+          tile.style.borderColor = '#22c55e';
+          tile.style.background = 'linear-gradient(135deg, #14532d 0%, #0f1430 100%)';
+        }
+      }
+      if (j.instanceId) document.getElementById('instance-id').textContent = j.instanceId;
     }).catch(()=>{});
     fetch('/actuator/info').then(r => r.json()).then(j => {
       const v = j.build && j.build.version || 'n/a';
