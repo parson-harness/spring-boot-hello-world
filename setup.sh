@@ -223,6 +223,33 @@ print_outputs() {
     
     # Save Harness config to file
     save_harness_config "$AMI_ID" "$ALB_DNS" "$S3_BUCKET" "$PROD_LISTENER" "$LISTENER_RULE"
+    
+    # Update ASG config with actual subnet IDs
+    update_asg_config
+}
+
+# Update ASG config with actual subnet IDs from Terraform
+update_asg_config() {
+    echo -e "${YELLOW}Updating ASG config with subnet IDs...${NC}"
+    
+    cd "$SCRIPT_DIR/infra/terraform"
+    
+    # Get subnet IDs from Terraform output
+    SUBNET_IDS=$(terraform output -json private_subnet_ids 2>/dev/null | jq -r 'join(",")' || echo "")
+    
+    if [ -z "$SUBNET_IDS" ]; then
+        echo -e "${YELLOW}Warning: Could not get subnet IDs from Terraform${NC}"
+        return
+    fi
+    
+    # Update the ASG config file
+    local asg_config="$SCRIPT_DIR/infra/harness/asg/asg-config.json"
+    
+    # Use jq to update the VPCZoneIdentifier
+    jq --arg subnets "$SUBNET_IDS" '.VPCZoneIdentifier = $subnets' "$asg_config" > "$asg_config.tmp" && mv "$asg_config.tmp" "$asg_config"
+    
+    echo -e "${GREEN}✓ ASG config updated with subnet IDs: $SUBNET_IDS${NC}"
+    echo ""
 }
 
 # Save Harness configuration to file
