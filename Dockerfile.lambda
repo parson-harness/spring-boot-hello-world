@@ -1,0 +1,20 @@
+# AWS Lambda Web Adapter - runs Spring Boot as Lambda without code changes
+# https://github.com/awslabs/aws-lambda-web-adapter
+
+FROM public.ecr.aws/awsguru/aws-lambda-adapter:0.8.4 AS adapter
+
+FROM public.ecr.aws/lambda/java:11
+
+# Copy the Lambda Web Adapter
+COPY --from=adapter /lambda-adapter /opt/extensions/lambda-adapter
+
+# Configure the adapter
+ENV PORT=8080
+ENV AWS_LWA_READINESS_CHECK_PATH=/actuator/health
+ENV AWS_LWA_INVOKE_MODE=response_stream
+
+# Copy the application JAR
+COPY target/spring-boot-hello-world-1.0-SNAPSHOT.jar /var/task/app.jar
+
+# Lambda handler - the adapter intercepts and forwards to Spring Boot
+CMD ["java", "-jar", "/var/task/app.jar"]

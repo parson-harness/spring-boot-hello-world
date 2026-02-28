@@ -1,0 +1,37 @@
+service:
+  name: spring-boot-lambda
+  identifier: springbootlambda
+  description: Spring Boot Hello World Lambda deployment
+  serviceDefinition:
+    type: AwsLambda
+    spec:
+      manifests:
+        - manifest:
+            identifier: lambdaFunctionDefinition
+            type: AwsLambdaFunctionDefinition
+            spec:
+              store:
+                type: Harness
+                spec:
+                  files:
+                    - /infra/harness/lambda/function-definition.yaml
+        - manifest:
+            identifier: lambdaFunctionAliasDefinition
+            type: AwsLambdaFunctionAliasDefinition
+            spec:
+              store:
+                type: Harness
+                spec:
+                  files:
+                    - /infra/harness/lambda/alias-definition.yaml
+      artifacts:
+        primary:
+          primaryArtifactRef: <+input>
+          sources:
+            - identifier: springbootlambda
+              spec:
+                connectorRef: <+input>
+                region: us-east-1
+                imagePath: spring-boot-hello-world
+                tag: <+pipeline.variables.image_tag>
+              type: Ecr

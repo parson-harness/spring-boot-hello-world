@@ -1,0 +1,3 @@
+# Lambda Alias Definition for Harness Blue-Green / Canary deployments
+# The alias "live" is used for traffic shifting
+aliasName: live

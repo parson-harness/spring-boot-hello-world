@@ -1,0 +1,8 @@
+# Lambda Function Definition for Harness deployments
+# Harness uses this to configure the Lambda function during deployment
+functionName: spring-boot-hello-world
+runtime: provided  # Container image, not a runtime
+handler: not.used.for.container  # Not used for container images
+memorySize: 1024
+timeout: 30
+packageType: Image
