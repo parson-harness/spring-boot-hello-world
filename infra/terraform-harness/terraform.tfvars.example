@@ -1,0 +1,36 @@
+# Harness Platform Configuration
+harness_account_id = "your-account-id"
+harness_api_key    = "pat.your-api-key-here"
+
+# Organization and Project
+org_identifier     = "default"
+project_identifier = "spring_boot_pov"
+create_project     = false  # Set to true to create a new project
+
+# Environment
+environment = "dev"
+aws_region  = "us-east-1"
+
+# Delegate Configuration
+delegate_selectors = ["harness-delegate"]
+
+# AWS Connector Type
+# - "irsa": Use delegate's IAM role (recommended for EKS delegates)
+# - "manual": Use access key/secret key
+aws_connector_type = "irsa"
+
+# Only needed if aws_connector_type = "manual"
+# aws_access_key_secret_ref = "account.aws_access_key"
+# aws_secret_key_secret_ref = "account.aws_secret_key"
+
+# GitHub Configuration (for manifest storage)
+github_connector_ref = "account.github"
+github_repo          = "your-org/spring-boot-hello-world"
+
+# Deployment Types to Enable
+enable_asg    = true
+enable_lambda = true
+enable_eks    = true
+
+# Kubernetes Configuration (only if enable_eks = true)
+k8s_namespace = "default"

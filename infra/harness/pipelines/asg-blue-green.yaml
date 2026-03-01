@@ -1,0 +1,110 @@
+pipeline:
+  name: ASG Blue-Green Deploy
+  identifier: asg_blue_green_deploy
+  projectIdentifier: <+input>
+  orgIdentifier: <+input>
+  description: |
+    Deploys Spring Boot app to AWS ASG using Blue-Green strategy.
+    - Creates new ASG with new AMI
+    - Shifts traffic from old to new
+    - Supports rollback
+  tags:
+    deployment-type: asg
+    strategy: blue-green
+  stages:
+    - stage:
+        name: Deploy to Dev
+        identifier: deploy_to_dev
+        description: Blue-Green deployment to dev environment
+        type: Deployment
+        spec:
+          deploymentType: Asg
+          service:
+            serviceRef: <+input>
+            serviceInputs:
+              serviceDefinition:
+                type: Asg
+                spec:
+                  artifacts:
+                    primary:
+                      primaryArtifactRef: <+input>
+                      sources:
+                        - identifier: ami
+                          type: AmazonMachineImage
+                          spec:
+                            version: <+input>
+          environment:
+            environmentRef: <+input>
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: <+input>
+          execution:
+            steps:
+              - step:
+                  name: ASG Blue Green Deploy
+                  identifier: asg_blue_green_deploy
+                  type: AsgBlueGreenDeploy
+                  timeout: 10m
+                  spec:
+                    useAlreadyRunningInstances: false
+                    loadBalancer: <+input>
+                    prodListener: <+input>
+                    prodListenerRuleArn: <+input>
+                    stageListener: <+input>
+                    stageListenerRuleArn: <+input>
+              - step:
+                  name: Verify Deployment
+                  identifier: verify_deployment
+                  type: ShellScript
+                  timeout: 5m
+                  spec:
+                    shell: Bash
+                    onDelegate: true
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          echo "Verifying deployment..."
+                          # Add health check or smoke test here
+                          # curl -f http://<ALB_DNS>/health || exit 1
+                          echo "Deployment verified!"
+              - step:
+                  name: Approval
+                  identifier: approval
+                  type: HarnessApproval
+                  timeout: 1d
+                  spec:
+                    approvalMessage: |
+                      Please review the Blue-Green deployment.
+                      
+                      New ASG is running with the new AMI version.
+                      Stage listener is routing traffic to the new ASG.
+                      
+                      Approve to swap production traffic to the new ASG.
+                    includePipelineExecutionHistory: true
+                    approvers:
+                      userGroups:
+                        - _project_all_users
+                      minimumCount: 1
+                      disallowPipelineExecutor: false
+              - step:
+                  name: ASG Blue Green Swap
+                  identifier: asg_blue_green_swap
+                  type: AsgBlueGreenSwapService
+                  timeout: 10m
+                  spec:
+                    downsizeOldAsg: true
+            rollbackSteps:
+              - step:
+                  name: ASG Blue Green Rollback
+                  identifier: asg_blue_green_rollback
+                  type: AsgBlueGreenRollback
+                  timeout: 10m
+                  spec: {}
+        tags: {}
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback

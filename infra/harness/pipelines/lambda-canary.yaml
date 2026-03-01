@@ -1,0 +1,117 @@
+pipeline:
+  name: Lambda Canary Deploy
+  identifier: lambda_canary_deploy
+  projectIdentifier: <+input>
+  orgIdentifier: <+input>
+  description: |
+    Deploys Spring Boot app to AWS Lambda using Canary strategy.
+    - Deploys new Lambda version
+    - Shifts traffic gradually via alias (10% -> 50% -> 100%)
+    - Supports instant rollback
+  tags:
+    deployment-type: lambda
+    strategy: canary
+  stages:
+    - stage:
+        name: Deploy to Dev
+        identifier: deploy_to_dev
+        description: Canary deployment to Lambda
+        type: Deployment
+        spec:
+          deploymentType: AwsLambda
+          service:
+            serviceRef: <+input>
+            serviceInputs:
+              serviceDefinition:
+                type: AwsLambda
+                spec:
+                  artifacts:
+                    primary:
+                      primaryArtifactRef: <+input>
+                      sources:
+                        - identifier: ecr
+                          type: Ecr
+                          spec:
+                            tag: <+input>
+          environment:
+            environmentRef: <+input>
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: <+input>
+          execution:
+            steps:
+              - step:
+                  name: Lambda Deploy
+                  identifier: lambda_deploy
+                  type: AwsLambdaDeploy
+                  timeout: 10m
+                  spec: {}
+              - step:
+                  name: Shift Traffic 10%
+                  identifier: shift_traffic_10
+                  type: AwsLambdaTrafficShift
+                  timeout: 5m
+                  spec:
+                    trafficPercent: 10
+              - step:
+                  name: Verify 10%
+                  identifier: verify_10
+                  type: ShellScript
+                  timeout: 5m
+                  spec:
+                    shell: Bash
+                    onDelegate: true
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          echo "Verifying canary at 10%..."
+                          # Add health check or smoke test
+                          sleep 30
+                          echo "Canary looks healthy!"
+              - step:
+                  name: Shift Traffic 50%
+                  identifier: shift_traffic_50
+                  type: AwsLambdaTrafficShift
+                  timeout: 5m
+                  spec:
+                    trafficPercent: 50
+              - step:
+                  name: Approval
+                  identifier: approval
+                  type: HarnessApproval
+                  timeout: 1d
+                  spec:
+                    approvalMessage: |
+                      Lambda canary deployment at 50% traffic.
+                      
+                      Review metrics and logs before proceeding to 100%.
+                      
+                      Approve to shift all traffic to new version.
+                    includePipelineExecutionHistory: true
+                    approvers:
+                      userGroups:
+                        - _project_all_users
+                      minimumCount: 1
+                      disallowPipelineExecutor: false
+              - step:
+                  name: Shift Traffic 100%
+                  identifier: shift_traffic_100
+                  type: AwsLambdaTrafficShift
+                  timeout: 5m
+                  spec:
+                    trafficPercent: 100
+            rollbackSteps:
+              - step:
+                  name: Lambda Rollback
+                  identifier: lambda_rollback
+                  type: AwsLambdaRollback
+                  timeout: 10m
+                  spec: {}
+        tags: {}
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback

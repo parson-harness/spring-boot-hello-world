@@ -1,0 +1,86 @@
+name: Build K8s Image
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag for the image (e.g., v1.0-blue)'
+        required: true
+        default: 'v1.0-blue'
+
+env:
+  AWS_REGION: us-east-1
+  PROJECT_NAME: spring-boot-hello-world
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build with Maven
+        run: mvn clean package -DskipTests -q
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "version=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Ensure ECR repository exists
+        run: |
+          aws ecr describe-repositories --repository-names ${{ env.PROJECT_NAME }} || \
+          aws ecr create-repository --repository-name ${{ env.PROJECT_NAME }} --image-scanning-configuration scanOnPush=true
+
+      - name: Build and push K8s image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ steps.version.outputs.version }}
+        run: |
+          docker build --platform linux/amd64 -t $ECR_REGISTRY/$PROJECT_NAME:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$PROJECT_NAME:$IMAGE_TAG
+
+      - name: Summary
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ steps.version.outputs.version }}
+        run: |
+          echo "## K8s Image Build Complete 🎉" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Image URI** | \`$ECR_REGISTRY/$PROJECT_NAME:$IMAGE_TAG\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Version** | \`$IMAGE_TAG\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Region** | \`${{ env.AWS_REGION }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Go to Harness" >> $GITHUB_STEP_SUMMARY
+          echo "2. Run the K8s Canary/Rolling pipeline" >> $GITHUB_STEP_SUMMARY
+          echo "3. Select image tag: \`$IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY

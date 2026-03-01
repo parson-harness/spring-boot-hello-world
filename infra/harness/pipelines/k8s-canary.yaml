@@ -1,0 +1,128 @@
+pipeline:
+  name: K8s Canary Deploy
+  identifier: k8s_canary_deploy
+  projectIdentifier: <+input>
+  orgIdentifier: <+input>
+  description: |
+    Deploys Spring Boot app to Kubernetes using Canary strategy.
+    - Deploys canary pods
+    - Shifts traffic gradually
+    - Supports rollback
+  tags:
+    deployment-type: kubernetes
+    strategy: canary
+  stages:
+    - stage:
+        name: Deploy to Dev
+        identifier: deploy_to_dev
+        description: Canary deployment to Kubernetes
+        type: Deployment
+        spec:
+          deploymentType: Kubernetes
+          service:
+            serviceRef: <+input>
+            serviceInputs:
+              serviceDefinition:
+                type: Kubernetes
+                spec:
+                  artifacts:
+                    primary:
+                      primaryArtifactRef: <+input>
+                      sources:
+                        - identifier: ecr
+                          type: Ecr
+                          spec:
+                            tag: <+input>
+          environment:
+            environmentRef: <+input>
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: <+input>
+          execution:
+            steps:
+              - stepGroup:
+                  name: Canary Deployment
+                  identifier: canary_deployment
+                  steps:
+                    - step:
+                        name: Canary Deployment
+                        identifier: canary_deploy
+                        type: K8sCanaryDeploy
+                        timeout: 10m
+                        spec:
+                          instanceSelection:
+                            type: Count
+                            spec:
+                              count: 1
+                          skipDryRun: false
+                    - step:
+                        name: Verify Canary
+                        identifier: verify_canary
+                        type: ShellScript
+                        timeout: 5m
+                        spec:
+                          shell: Bash
+                          onDelegate: true
+                          source:
+                            type: Inline
+                            spec:
+                              script: |
+                                echo "Verifying canary pod..."
+                                kubectl get pods -l app=<+service.name> -n <+infra.namespace>
+                                # Add health check here
+                                echo "Canary looks healthy!"
+                    - step:
+                        name: Approval
+                        identifier: approval
+                        type: HarnessApproval
+                        timeout: 1d
+                        spec:
+                          approvalMessage: |
+                            Canary pod is running.
+                            
+                            Review pod logs and metrics before proceeding.
+                            
+                            Approve to roll out to all pods.
+                          includePipelineExecutionHistory: true
+                          approvers:
+                            userGroups:
+                              - _project_all_users
+                            minimumCount: 1
+                            disallowPipelineExecutor: false
+              - stepGroup:
+                  name: Primary Deployment
+                  identifier: primary_deployment
+                  steps:
+                    - step:
+                        name: Canary Delete
+                        identifier: canary_delete
+                        type: K8sCanaryDelete
+                        timeout: 10m
+                        spec: {}
+                    - step:
+                        name: Rolling Deployment
+                        identifier: rolling_deploy
+                        type: K8sRollingDeploy
+                        timeout: 10m
+                        spec:
+                          skipDryRun: false
+            rollbackSteps:
+              - step:
+                  name: Canary Delete
+                  identifier: rollback_canary_delete
+                  type: K8sCanaryDelete
+                  timeout: 10m
+                  spec: {}
+              - step:
+                  name: Rolling Rollback
+                  identifier: rolling_rollback
+                  type: K8sRollingRollback
+                  timeout: 10m
+                  spec: {}
+        tags: {}
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback

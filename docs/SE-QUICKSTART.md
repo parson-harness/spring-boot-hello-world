@@ -14,6 +14,36 @@ This repo contains a Spring Boot sample app with infrastructure for multiple dep
 
 ---
 
+## CI Options
+
+| Option | When to Use |
+|--------|-------------|
+| **Harness CI** | Full Harness demo (CI + CD) |
+| **GitHub Actions** | Quick setup, GitHub-native |
+| **Local scripts** | Fast iteration, no CI needed |
+
+### GitHub Actions (Optional)
+Workflows are disabled by default. To enable:
+```bash
+mv .github/workflows/build-ami.yml.disabled .github/workflows/build-ami.yml
+```
+See `.github/workflows/README.md` for setup instructions.
+
+### Harness CI
+Use the deploy scripts as reference for build steps, or import pipeline YAML from `infra/harness/pipelines/`.
+
+### Automated Harness Setup (Optional)
+Provision all Harness entities with Terraform:
+```bash
+cd infra/terraform-harness
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your Harness account details
+terraform init && terraform apply
+```
+See `infra/terraform-harness/README.md` for details.
+
+---
+
 ## Deployment Models
 
 | Model | Best For | Cold Start | Cost Model |
