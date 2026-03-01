@@ -44,15 +44,23 @@ locals {
 # =============================================================================
 resource "harness_platform_connector_aws" "aws" {
   identifier  = "aws_${local.env_id}"
-  name        = "AWS ${title(var.environment)}"
+  name        = "AWS Lambda"
   description = "AWS connector for ${var.environment} deployments"
   org_id      = var.org_identifier
   project_id  = local.project_id
-  tags        = ["pov", var.environment]
+  tags        = ["${var.environment}:", "pov:"]
 
   # Use IRSA if delegate is in EKS, otherwise use IAM role
-  dynamic "inherit_from_delegate" {
+  dynamic "irsa" {
     for_each = var.aws_connector_type == "irsa" ? [1] : []
+    content {
+      delegate_selectors = var.delegate_selectors
+      region             = var.aws_region
+    }
+  }
+
+  dynamic "inherit_from_delegate" {
+    for_each = var.aws_connector_type == "inherit" ? [1] : []
     content {
       delegate_selectors = var.delegate_selectors
     }
@@ -140,7 +148,7 @@ resource "harness_platform_infrastructure" "asg" {
 resource "harness_platform_infrastructure" "lambda" {
   count             = var.enable_lambda ? 1 : 0
   identifier        = "lambda_${local.env_id}"
-  name              = "Lambda ${title(var.environment)}"
+  name              = "Lambda-${title(var.environment)}"
   org_id            = var.org_identifier
   project_id        = local.project_id
   env_id            = harness_platform_environment.env.identifier
@@ -149,7 +157,7 @@ resource "harness_platform_infrastructure" "lambda" {
   
   yaml = <<-EOT
     infrastructureDefinition:
-      name: Lambda ${title(var.environment)}
+      name: Lambda-${title(var.environment)}
       identifier: lambda_${local.env_id}
       orgIdentifier: ${var.org_identifier}
       projectIdentifier: ${local.project_id}
@@ -159,6 +167,7 @@ resource "harness_platform_infrastructure" "lambda" {
       spec:
         connectorRef: ${harness_platform_connector_aws.aws.identifier}
         region: ${var.aws_region}
+      allowSimultaneousDeployments: false
   EOT
 }
 
@@ -166,7 +175,7 @@ resource "harness_platform_infrastructure" "lambda" {
 resource "harness_platform_infrastructure" "k8s" {
   count             = var.enable_eks ? 1 : 0
   identifier        = "k8s_${local.env_id}"
-  name              = "K8s ${title(var.environment)}"
+  name              = "K8s-${title(var.environment)}"
   org_id            = var.org_identifier
   project_id        = local.project_id
   env_id            = harness_platform_environment.env.identifier
@@ -175,16 +184,18 @@ resource "harness_platform_infrastructure" "k8s" {
   
   yaml = <<-EOT
     infrastructureDefinition:
-      name: K8s ${title(var.environment)}
+      name: K8s-${title(var.environment)}
       identifier: k8s_${local.env_id}
       orgIdentifier: ${var.org_identifier}
       projectIdentifier: ${local.project_id}
       environmentRef: ${local.env_id}
+      deploymentType: Kubernetes
       type: KubernetesDirect
       spec:
         connectorRef: ${harness_platform_connector_kubernetes.eks[0].identifier}
         namespace: ${var.k8s_namespace}
         releaseName: release-<+INFRA_KEY_SHORT_ID>
+      allowSimultaneousDeployments: false
   EOT
 }
 
@@ -307,13 +318,13 @@ resource "harness_platform_service" "lambda" {
             primary:
               primaryArtifactRef: <+input>
               sources:
-                - identifier: ecr
-                  type: Ecr
-                  spec:
+                - spec:
                     connectorRef: ${harness_platform_connector_aws.aws.identifier}
-                    region: ${var.aws_region}
                     imagePath: ${var.project_name}
                     tag: <+input>
+                    region: ${var.aws_region}
+                  identifier: ${replace(var.project_name, "-", "_")}
+                  type: Ecr
   EOT
 }
 
@@ -340,9 +351,6 @@ resource "harness_platform_pipeline" "lambda" {
         - Deploys new Lambda version
         - Shifts traffic gradually via alias (10% -> 50% -> 100%)
         - Supports instant rollback
-      tags:
-        deployment-type: lambda
-        strategy: canary
       stages:
         - stage:
             name: Deploy to Dev
@@ -473,6 +481,7 @@ resource "harness_platform_service" "k8s" {
                     type: Github
                     spec:
                       connectorRef: ${var.github_connector_ref}
+                      gitFetchType: Branch
                       repoName: ${var.github_repo}
                       branch: main
                       paths:
@@ -483,13 +492,13 @@ resource "harness_platform_service" "k8s" {
             primary:
               primaryArtifactRef: <+input>
               sources:
-                - identifier: ecr
-                  type: Ecr
-                  spec:
+                - spec:
                     connectorRef: ${harness_platform_connector_aws.aws.identifier}
-                    region: ${var.aws_region}
                     imagePath: ${var.project_name}
                     tag: <+input>
+                    region: ${var.aws_region}
+                  identifier: ${replace(var.project_name, "-", "_")}
+                  type: Ecr
   EOT
 }
 

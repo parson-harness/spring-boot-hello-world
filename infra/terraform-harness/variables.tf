@@ -92,11 +92,11 @@ variable "enable_eks" {
 # =============================================================================
 
 variable "aws_connector_type" {
-  description = "AWS connector credential type: 'irsa' (inherit from delegate) or 'manual' (access keys)"
+  description = "AWS connector credential type: 'irsa' (IRSA on EKS), 'inherit' (inherit from delegate), or 'manual' (access keys)"
   type        = string
   default     = "irsa"
   validation {
-    condition     = contains(["irsa", "manual"], var.aws_connector_type)
+    condition     = contains(["irsa", "inherit", "manual"], var.aws_connector_type)
     error_message = "aws_connector_type must be 'irsa' or 'manual'"
   }
 }
