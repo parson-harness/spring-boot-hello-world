@@ -10,22 +10,22 @@ output "ecr_repository_name" {
 
 output "lambda_function_name" {
   description = "Lambda function name"
-  value       = aws_lambda_function.app.function_name
+  value       = var.create_lambda ? aws_lambda_function.app[0].function_name : null
 }
 
 output "lambda_function_arn" {
   description = "Lambda function ARN"
-  value       = aws_lambda_function.app.arn
+  value       = var.create_lambda ? aws_lambda_function.app[0].arn : null
 }
 
 output "lambda_alias_name" {
   description = "Lambda alias name for deployments"
-  value       = aws_lambda_alias.live.name
+  value       = var.create_lambda ? aws_lambda_alias.live[0].name : null
 }
 
 output "lambda_function_url" {
   description = "Lambda function URL (public endpoint)"
-  value       = aws_lambda_function_url.app.function_url
+  value       = var.create_lambda ? aws_lambda_function_url.app[0].function_url : null
 }
 
 output "lambda_role_arn" {

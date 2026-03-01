@@ -58,11 +58,14 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
 }
 
 # Lambda Function
+# Note: This requires an image to exist in ECR first.
+# Set var.create_lambda = false on first run, push image, then set to true.
 resource "aws_lambda_function" "app" {
+  count         = var.create_lambda ? 1 : 0
   function_name = var.app_name
   role          = aws_iam_role.lambda_role.arn
   package_type  = "Image"
-  image_uri     = "${aws_ecr_repository.app.repository_url}:latest"
+  image_uri     = "${aws_ecr_repository.app.repository_url}:${var.image_tag}"
   timeout       = 30
   memory_size   = 1024
 
@@ -79,9 +82,10 @@ resource "aws_lambda_function" "app" {
 
 # Lambda Alias for Blue-Green / Canary deployments
 resource "aws_lambda_alias" "live" {
+  count            = var.create_lambda ? 1 : 0
   name             = "live"
-  function_name    = aws_lambda_function.app.function_name
-  function_version = aws_lambda_function.app.version
+  function_name    = aws_lambda_function.app[0].function_name
+  function_version = aws_lambda_function.app[0].version
 
   lifecycle {
     ignore_changes = [function_version, routing_config]
@@ -90,23 +94,25 @@ resource "aws_lambda_alias" "live" {
 
 # Lambda Function URL (simpler than API Gateway for POV)
 resource "aws_lambda_function_url" "app" {
-  function_name      = aws_lambda_function.app.function_name
-  qualifier          = aws_lambda_alias.live.name
+  count              = var.create_lambda ? 1 : 0
+  function_name      = aws_lambda_function.app[0].function_name
+  qualifier          = aws_lambda_alias.live[0].name
   authorization_type = "NONE"
 
   cors {
     allow_origins = ["*"]
-    allow_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    allow_methods = ["*"]
     allow_headers = ["*"]
   }
 }
 
 # Permission for Function URL to invoke the alias
 resource "aws_lambda_permission" "function_url" {
+  count                  = var.create_lambda ? 1 : 0
   statement_id           = "FunctionURLAllowPublicAccess"
   action                 = "lambda:InvokeFunctionUrl"
-  function_name          = aws_lambda_function.app.function_name
-  qualifier              = aws_lambda_alias.live.name
+  function_name          = aws_lambda_function.app[0].function_name
+  qualifier              = aws_lambda_alias.live[0].name
   principal              = "*"
   function_url_auth_type = "NONE"
 }

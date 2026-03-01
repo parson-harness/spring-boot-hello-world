@@ -82,9 +82,9 @@ build_app() {
     echo ""
 }
 
-# Deploy Lambda infrastructure
-deploy_infrastructure() {
-    echo -e "${YELLOW}Step 2: Deploying Lambda infrastructure...${NC}"
+# Deploy ECR repository (phase 1 - before image push)
+deploy_ecr() {
+    echo -e "${YELLOW}Step 2: Creating ECR repository...${NC}"
     cd "$SCRIPT_DIR/infra/terraform-lambda"
     
     terraform init -input=false > /dev/null
@@ -92,9 +92,27 @@ deploy_infrastructure() {
         -var "app_name=$PROJECT_NAME" \
         -var "environment=$ENVIRONMENT" \
         -var "aws_region=$AWS_REGION" \
-        -var "owner=$OWNER"
+        -var "owner=$OWNER" \
+        -var "create_lambda=false"
     
-    echo -e "${GREEN}✓ Infrastructure deployed${NC}"
+    echo -e "${GREEN}✓ ECR repository created${NC}"
+    echo ""
+}
+
+# Deploy Lambda function (phase 2 - after image push)
+deploy_lambda() {
+    echo -e "${YELLOW}Step 4: Creating Lambda function...${NC}"
+    cd "$SCRIPT_DIR/infra/terraform-lambda"
+    
+    terraform apply -auto-approve -input=false \
+        -var "app_name=$PROJECT_NAME" \
+        -var "environment=$ENVIRONMENT" \
+        -var "aws_region=$AWS_REGION" \
+        -var "owner=$OWNER" \
+        -var "create_lambda=true" \
+        -var "image_tag=$IMAGE_TAG"
+    
+    echo -e "${GREEN}✓ Lambda function created${NC}"
     echo ""
 }
 
@@ -112,9 +130,9 @@ build_and_push_image() {
     # Login to ECR
     aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REPO"
     
-    # Build image
-    echo -e "${BLUE}  Building Docker image...${NC}"
-    docker build -f Dockerfile.lambda -t "$PROJECT_NAME:$IMAGE_TAG" .
+    # Build image (must be x86_64 for Lambda)
+    echo -e "${BLUE}  Building Docker image (linux/amd64)...${NC}"
+    docker build --platform linux/amd64 -f Dockerfile.lambda -t "$PROJECT_NAME:$IMAGE_TAG" .
     
     # Tag and push
     docker tag "$PROJECT_NAME:$IMAGE_TAG" "$ECR_REPO:$IMAGE_TAG"
@@ -163,9 +181,9 @@ print_outputs() {
     
     cd "$SCRIPT_DIR/infra/terraform-lambda"
     
-    FUNCTION_URL=$(terraform output -raw lambda_function_url)
-    FUNCTION_NAME=$(terraform output -raw lambda_function_name)
-    ECR_REPO=$(terraform output -raw ecr_repository_url)
+    FUNCTION_URL=$(terraform output -raw lambda_function_url 2>/dev/null || echo "")
+    FUNCTION_NAME=$(terraform output -raw lambda_function_name 2>/dev/null || echo "")
+    ECR_REPO=$(terraform output -raw ecr_repository_url 2>/dev/null || echo "")
     
     echo -e "${GREEN}Lambda Function:${NC} $FUNCTION_NAME"
     echo -e "${GREEN}ECR Repository:${NC}  $ECR_REPO"
@@ -235,9 +253,9 @@ case "${1:-}" in
         
         check_prereqs
         build_app
-        deploy_infrastructure
+        deploy_ecr
         build_and_push_image
-        update_lambda
+        deploy_lambda
         print_outputs
         ;;
 esac

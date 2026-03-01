@@ -57,7 +57,7 @@ infra/
 From the repo root:
 
 ```bash
-./setup.sh
+./deploy-asg.sh
 ```
 
 Or manually:

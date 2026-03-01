@@ -1,6 +1,18 @@
 # Spring Boot Hello World
 
-A sample Java application built with Spring Boot, with AWS ASG infrastructure and Harness Blue-Green deployment support.
+A sample Java application built with Spring Boot, with multiple AWS deployment options and Harness CD support.
+
+> **📚 SE Quick Start**: See [docs/SE-QUICKSTART.md](docs/SE-QUICKSTART.md) for step-by-step instructions on deploying and configuring Harness for POVs.
+
+---
+
+## 🎯 Deployment Models
+
+| Model | Script | Harness Strategy | Best For |
+|-------|--------|------------------|----------|
+| **ASG Blue-Green** | `./deploy-asg.sh` | Blue-Green with traffic shifting | Traditional EC2 workloads |
+| **Lambda** | `./deploy-lambda.sh` | Canary with alias routing | Event-driven, variable traffic |
+| **EKS/Kubernetes** | `./deploy-eks.sh` | Canary, Blue-Green, Rolling | Container workloads |
 
 ---
 
@@ -11,8 +23,8 @@ A sample Java application built with Spring Boot, with AWS ASG infrastructure an
 - JSON API at `/api` and health at `/health`
 - Swagger UI at `/swagger-ui.html`
 - Build & commit metadata at `/actuator/info`
-- **AWS Infrastructure** (Terraform): VPC, ALB, ASG with Blue-Green support
-- **Harness CD**: ASG Blue-Green deployment with traffic shifting
+- **AWS Infrastructure** (Terraform): VPC, ALB, ASG, Lambda, ECR
+- **Harness CD**: ASG Blue-Green and Lambda Canary deployments
 - Kubernetes manifests (Deployment + Service) ready for EKS
 - Docker image that runs on Linux/amd64
 
@@ -23,11 +35,11 @@ A sample Java application built with Spring Boot, with AWS ASG infrastructure an
 For a complete AWS ASG deployment with Harness Blue-Green support:
 
 ```bash
-# Run the setup script (uses default project name)
-./setup.sh
+# Run the deploy script (uses default project name)
+./deploy-asg.sh
 
 # Or use a custom project name for your POV
-PROJECT_NAME=acme-demo ./setup.sh
+PROJECT_NAME=acme-demo ./deploy-asg.sh
 ```
 
 This will:
@@ -51,7 +63,7 @@ git clone https://github.com/YOUR-ORG/spring-boot-hello-world.git
 cd spring-boot-hello-world
 
 # 3. Deploy with your name and a unique project name
-PROJECT_NAME=acme-demo OWNER=smith ./setup.sh
+PROJECT_NAME=acme-demo OWNER=smith ./deploy-asg.sh
 
 # 4. Commit the auto-generated configs
 git add infra/harness/asg/*.json harness-config.txt

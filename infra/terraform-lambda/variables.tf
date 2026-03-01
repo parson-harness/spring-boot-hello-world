@@ -21,3 +21,15 @@ variable "owner" {
   type        = string
   default     = "unknown"
 }
+
+variable "create_lambda" {
+  description = "Whether to create the Lambda function. Set to false on first run to create ECR first, push image, then set to true."
+  type        = bool
+  default     = true
+}
+
+variable "image_tag" {
+  description = "Container image tag to deploy"
+  type        = string
+  default     = "latest"
+}
