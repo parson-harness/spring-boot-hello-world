@@ -32,7 +32,9 @@ usage() {
     echo "  image_tag    Tag for the container image (default: latest)"
     echo ""
     echo "Commands:"
-    echo "  (none)       Full deployment: build JAR, build image, push to ECR, deploy infra"
+    echo "  (none)       Full deployment: build JAR, build image, push to ECR, deploy Lambda"
+    echo "  push         Build and push image to ECR only (for Harness deployments)"
+    echo "  infra        Create ECR + Lambda infrastructure only (no image build)"
     echo "  destroy      Tear down Lambda infrastructure"
     echo "  help         Show this help message"
     echo ""
@@ -43,8 +45,10 @@ usage() {
     echo "  ENVIRONMENT    Environment name (default: dev)"
     echo ""
     echo "Examples:"
-    echo "  $0                                    # Deploy with 'latest' tag"
-    echo "  $0 v1.0-blue                          # Deploy with specific tag"
+    echo "  $0                                    # Full deploy with 'latest' tag"
+    echo "  $0 v1.0-blue                          # Full deploy with specific tag"
+    echo "  $0 v1.0-green push                    # Build and push image only (for Harness)"
+    echo "  $0 infra                              # Create infrastructure only"
     echo "  PROJECT_NAME=acme-demo OWNER=smith $0 v1.0.0"
     echo "  $0 destroy                            # Tear down infrastructure"
 }
@@ -234,12 +238,42 @@ destroy() {
 }
 
 # Main
-case "${1:-}" in
+case "${2:-${1:-}}" in
     help|-h|--help)
         usage
         ;;
     destroy)
         destroy
+        ;;
+    push)
+        # Build and push image only - for Harness deployments
+        echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${BLUE}║         Lambda Image Push (for Harness)                    ║${NC}"
+        echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+        echo -e "${GREEN}Project:${NC}     $PROJECT_NAME"
+        echo -e "${GREEN}Image Tag:${NC}   $IMAGE_TAG"
+        echo ""
+        
+        check_prereqs
+        build_app
+        deploy_ecr
+        build_and_push_image
+        
+        echo -e "${GREEN}✓ Image ready for Harness deployment${NC}"
+        echo ""
+        echo "Run the Lambda Canary pipeline in Harness and select tag: $IMAGE_TAG"
+        ;;
+    infra)
+        # Create infrastructure only
+        echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${BLUE}║         Lambda Infrastructure Setup                        ║${NC}"
+        echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+        
+        check_prereqs
+        deploy_ecr
+        echo -e "${GREEN}✓ ECR repository created. Push an image before creating Lambda.${NC}"
         ;;
     *)
         echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
