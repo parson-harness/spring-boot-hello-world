@@ -1,9 +1,7 @@
-# Lambda Function Definition for Harness deployments
-# Harness uses this to configure the Lambda function during deployment
-functionName: spring-boot-hello-world
-role: arn:aws:iam::759984737373:role/spring-boot-hello-world-lambda-role
-runtime: provided  # Container image, not a runtime
-handler: not.used.for.container  # Not used for container images
-memorySize: 1024
-timeout: 30
-packageType: Image
+{
+  "functionName": "spring-boot-hello-world",
+  "role": "arn:aws:iam::759984737373:role/spring-boot-hello-world-lambda-role",
+  "packageType": "Image",
+  "memorySize": 1024,
+  "timeout": 30
+}
