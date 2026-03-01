@@ -6,3 +6,5 @@ handler: not.used.for.container  # Not used for container images
 memorySize: 1024
 timeout: 30
 packageType: Image
+# Force update even if code hash hasn't changed (useful for config-only updates)
+updateFunctionCode: true

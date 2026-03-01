@@ -48,28 +48,31 @@ output "k8s_service_id" {
   value       = var.enable_eks ? harness_platform_service.k8s[0].identifier : null
 }
 
+output "lambda_pipeline_id" {
+  description = "Lambda pipeline identifier"
+  value       = var.enable_lambda ? harness_platform_pipeline.lambda[0].identifier : null
+}
+
+output "k8s_pipeline_id" {
+  description = "Kubernetes pipeline identifier"
+  value       = var.enable_eks ? harness_platform_pipeline.k8s[0].identifier : null
+}
+
 output "next_steps" {
   description = "Next steps after provisioning"
   value       = <<-EOT
     
     Harness entities created! Next steps:
     
-    1. Import pipelines from infra/harness/pipelines/:
-       - asg-blue-green.yaml
-       - lambda-canary.yaml
-       - k8s-canary.yaml
+    1. Build artifacts:
+       - Lambda: ./deploy-lambda.sh v1.0-blue (builds and pushes image)
+       - K8s: ./deploy-eks.sh v1.0-blue (builds and pushes image)
     
-    2. Update pipeline inputs with:
-       - Service: ${var.enable_asg ? harness_platform_service.asg[0].identifier : "N/A"}
-       - Environment: ${harness_platform_environment.env.identifier}
-       - Infrastructure: See outputs above
+    2. Run the pipeline in Harness:
+       - Lambda: ${var.enable_lambda ? harness_platform_pipeline.lambda[0].identifier : "N/A"}
+       - K8s: ${var.enable_eks ? harness_platform_pipeline.k8s[0].identifier : "N/A"}
     
-    3. Build artifacts:
-       - ASG: ./deploy-asg.sh (builds AMI)
-       - Lambda: ./deploy-lambda.sh (builds image)
-       - K8s: ./deploy-eks.sh (builds image)
-    
-    4. Run the pipeline!
+    3. Select artifact version when prompted
     
   EOT
 }
