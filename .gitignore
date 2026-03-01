@@ -71,3 +71,11 @@ npm-debug.log*
 
 # Generated config files
 harness-config.txt
+
+# Lambda/EKS deployment outputs
+infra/terraform-lambda/terraform.tfstate*
+infra/terraform-eks/terraform.tfstate*
+infra/terraform-delegate/terraform.tfstate*
+
+# Docker
+*.tar

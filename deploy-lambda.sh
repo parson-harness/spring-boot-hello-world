@@ -17,6 +17,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_NAME="${PROJECT_NAME:-spring-boot-hello-world}"
 OWNER="${OWNER:-unknown}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
+AWS_PROFILE="${AWS_PROFILE:-default}"
+export AWS_PROFILE
 ENVIRONMENT="${ENVIRONMENT:-dev}"
 IMAGE_TAG="${1:-latest}"
 
