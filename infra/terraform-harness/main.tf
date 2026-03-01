@@ -289,7 +289,7 @@ resource "harness_platform_service" "lambda" {
                       repoName: ${var.github_repo}
                       branch: main
                       paths:
-                        - infra/harness/lambda/function-definition.yaml
+                        - infra/harness/lambda/function-definition.json
             - manifest:
                 identifier: aliasDefinition
                 type: AwsLambdaFunctionAliasDefinition
@@ -302,7 +302,7 @@ resource "harness_platform_service" "lambda" {
                       repoName: ${var.github_repo}
                       branch: main
                       paths:
-                        - infra/harness/lambda/alias-definition.yaml
+                        - infra/harness/lambda/alias-definition.json
           artifacts:
             primary:
               primaryArtifactRef: <+input>
