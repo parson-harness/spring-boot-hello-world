@@ -1,6 +1,6 @@
 {
   "functionName": "<+serviceVariables.function_name>",
-  "role": "<+infra.variables.lambda_role_arn>",
+  "role": "<+serviceVariables.lambda_role_arn>",
   "packageType": "Image",
   "memorySize": 1024,
   "timeout": 30
