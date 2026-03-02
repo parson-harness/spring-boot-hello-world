@@ -79,6 +79,21 @@ check_prereqs() {
     echo ""
 }
 
+# Ensure Terraform state backend exists (S3 + DynamoDB)
+ensure_backend() {
+    local bucket_name="spring-boot-hello-world-terraform-state-dev"
+    
+    # Check if S3 bucket exists
+    if ! aws s3api head-bucket --bucket "$bucket_name" 2>/dev/null; then
+        echo -e "${YELLOW}Creating Terraform state backend...${NC}"
+        cd "$SCRIPT_DIR/infra/terraform-bootstrap"
+        terraform init -input=false > /dev/null
+        terraform apply -auto-approve -input=false
+        echo -e "${GREEN}✓ Terraform state backend created${NC}"
+        echo ""
+    fi
+}
+
 # Build JAR
 build_app() {
     echo -e "${YELLOW}Step 1: Building application JAR...${NC}"
@@ -90,6 +105,8 @@ build_app() {
 
 # Deploy ECR repository (phase 1 - before image push)
 deploy_ecr() {
+    ensure_backend
+    
     echo -e "${YELLOW}Step 2: Creating ECR repository...${NC}"
     cd "$SCRIPT_DIR/infra/terraform-lambda"
     

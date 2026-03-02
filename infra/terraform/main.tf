@@ -7,15 +7,6 @@ terraform {
       version = "~> 5.0"
     }
   }
-
-  # Uncomment after running terraform-bootstrap
-  # backend "s3" {
-  #   bucket         = "spring-boot-hello-world-terraform-state-dev"
-  #   key            = "terraform.tfstate"
-  #   region         = "us-east-1"
-  #   dynamodb_table = "spring-boot-hello-world-terraform-locks-dev"
-  #   encrypt        = true
-  # }
 }
 
 provider "aws" {

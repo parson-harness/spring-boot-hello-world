@@ -42,6 +42,14 @@ terraform init && terraform apply
 ```
 See `infra/terraform-harness/README.md` for details.
 
+### Remote State (Default)
+Terraform state is stored in S3 by default for easy teardown after POV:
+- State bucket: `spring-boot-hello-world-terraform-state-dev`
+- State files: `asg/`, `lambda/`, `eks/` (separate per module)
+- Locking: DynamoDB table for concurrent access
+
+The deploy scripts automatically create the S3 bucket and DynamoDB table on first run.
+
 ---
 
 ## Deployment Models
