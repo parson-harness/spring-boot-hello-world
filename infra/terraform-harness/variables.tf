@@ -139,3 +139,49 @@ variable "github_repo" {
   type        = string
   default     = "parson-harness/spring-boot-hello-world"
 }
+
+# =============================================================================
+# ASG Infrastructure Values (from AWS Terraform outputs)
+# =============================================================================
+
+variable "asg_security_group_id" {
+  description = "Security group ID for ASG instances (from AWS infra)"
+  type        = string
+  default     = ""
+}
+
+variable "asg_subnet_ids" {
+  description = "Comma-separated subnet IDs for ASG (from AWS infra)"
+  type        = string
+  default     = ""
+}
+
+variable "alb_name" {
+  description = "Name of the Application Load Balancer (from AWS infra)"
+  type        = string
+  default     = ""
+}
+
+variable "prod_listener_arn" {
+  description = "ARN of the production listener (from AWS infra)"
+  type        = string
+  default     = ""
+}
+
+variable "prod_listener_rule_arn" {
+  description = "ARN of the weighted listener rule (from AWS infra)"
+  type        = string
+  default     = ""
+}
+
+variable "stage_listener_arn" {
+  description = "ARN of the stage listener - same as prod for single listener setup (from AWS infra)"
+  type        = string
+  default     = ""
+}
+
+variable "stage_listener_rule_arn" {
+  description = "ARN of the stage listener rule - same as prod for single listener setup (from AWS infra)"
+  type        = string
+  default     = ""
+}

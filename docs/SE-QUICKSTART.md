@@ -16,15 +16,27 @@ source .env.<pov-name>
 
 # 3. Edit Harness config with your account details
 vi infra/terraform-harness/terraform.tfvars.<pov-name>
-cp infra/terraform-harness/terraform.tfvars.<pov-name> infra/terraform-harness/terraform.tfvars
 
-# 4. Deploy Lambda infrastructure + push image
-./deploy-lambda.sh push
+# 4. Deploy AWS infrastructure (choose one or both)
+./deploy-lambda.sh deploy   # Lambda: ECR + Lambda function
+./deploy-asg.sh deploy      # ASG: VPC + ALB + AMI
 
-# 5. Create Harness entities
+# 5. Auto-populate Harness tfvars with AWS values
+./update-harness-tfvars.sh <pov-name>
+
+# 6. Switch to POV and create Harness entities
+./switch-pov.sh <pov-name>
 cd infra/terraform-harness && terraform init && terraform apply
 
-# 6. Run pipeline in Harness UI
+# 7. Run pipeline in Harness UI
+```
+
+### Switching Between POVs
+
+```bash
+# Switch to a different POV (updates backend.hcl symlink and copies tfvars)
+./switch-pov.sh <pov-name>
+source .env.<pov-name>
 ```
 
 ---
@@ -68,20 +80,21 @@ terraform init && terraform apply
 See `infra/terraform-harness/README.md` for details.
 
 ### Remote State (Default)
-Terraform state is stored in S3 for easy teardown after POV. The deploy scripts auto-create `infra/backend.hcl` on first run.
+Terraform state is stored in S3 for easy teardown after POV. The `setup-pov.sh` script creates all backend configs automatically.
 
 **Running Multiple POVs:**
-You can run your personal sandbox AND customer POVs from the same repo:
+Use the POV management scripts to run multiple POVs from the same repo:
 ```bash
-# Create separate backend configs
-cp infra/backend.hcl.example infra/backend-sandbox.hcl   # Your sandbox
-cp infra/backend.hcl.example infra/backend-acme.hcl      # Customer POV
+# Setup a new POV (creates backend config, tfvars, .env file)
+./setup-pov.sh
+# Enter: acme
 
-# Edit each with unique bucket names, then symlink the active one:
-ln -sf backend-sandbox.hcl infra/backend.hcl   # Switch to sandbox
-ln -sf backend-acme.hcl infra/backend.hcl      # Switch to customer
+# Switch between POVs
+./switch-pov.sh acme    # Switch to customer POV
+./switch-pov.sh sandbox # Switch to your sandbox
 
-# Re-init after switching: terraform init -reconfigure -backend-config=../backend.hcl
+# After switching, source the environment
+source .env.<pov-name>
 ```
 
 ---
@@ -126,22 +139,44 @@ This creates:
 ./build-ami.sh v1.0-blue
 ```
 
-## Step 3: Configure Harness
+## Step 3: Configure Harness (Automated)
 
-### Create AWS Connector
+The Harness Terraform module creates all entities automatically:
+
+```bash
+# Auto-populate tfvars with AWS infrastructure values
+./update-harness-tfvars.sh <pov-name>
+
+# Switch to POV and apply
+./switch-pov.sh <pov-name>
+cd infra/terraform-harness
+terraform init && terraform apply
+```
+
+This creates:
+- AWS Connector (IRSA-based)
+- ASG Service with manifests and AMI artifact
+- ASG Infrastructure Definition
+- ASG Blue-Green Pipeline (with ALB values pre-configured)
+
+### Manual Setup (Alternative)
+
+<details>
+<summary>Click to expand manual Harness setup steps</summary>
+
+#### Create AWS Connector
 1. **Project Settings → Connectors → New Connector → AWS**
 2. Name: `aws-asg`
 3. Credentials: **Use IRSA** or **Assume Role** (use delegate's IAM role)
 4. Test connection
 
-### Create Service
+#### Create Service
 1. **Services → New Service**
 2. Name: `spring-boot-asg`
 3. Deployment Type: **AWS Auto Scaling Group**
 4. **Manifests** (from repo):
    - Launch Template: `/infra/harness/asg/launch-template.json`
    - ASG Configuration: `/infra/harness/asg/asg-config.json`
-   - User Data: `/infra/harness/asg/user-data.sh`
 5. **Artifacts**:
    - Type: **Amazon Machine Image**
    - Connector: `aws-asg`
@@ -149,38 +184,18 @@ This creates:
    - Filters: `Application` = `<PROJECT_NAME>`
    - Version: Runtime Input
 
-### Create Environment
-1. **Environments → New Environment**
-2. Name: `dev`
-3. Type: **Pre-Production**
+#### Create Environment & Infrastructure
+1. **Environments → New Environment** → Name: `dev`, Type: **Pre-Production**
+2. **New Infrastructure** → Type: **AWS Auto Scaling Group**
+3. Connector: `aws-asg`, Region: `us-east-1`
 
-### Create Infrastructure Definition
-1. In the environment, **New Infrastructure**
-2. Name: `aws-asg-infra`
-3. Type: **AWS Auto Scaling Group**
-4. Connector: `aws-asg`
-5. Region: `us-east-1`
-6. Base ASG: (leave empty - Harness creates it)
+#### Create Pipeline
+1. **Pipelines → New Pipeline** → Name: `ASG Blue-Green Deploy`
+2. Add Stage: **Deploy → AWS Auto Scaling Group**
+3. Deployment Strategy: **Blue Green**
+4. Use values from `harness-config.txt` for ALB configuration
 
-### Create Pipeline
-1. **Pipelines → New Pipeline**
-2. Name: `ASG Blue-Green Deploy`
-3. Add Stage: **Deploy → AWS Auto Scaling Group**
-4. Deployment Strategy: **Blue Green**
-5. Configure steps:
-   - **ASG Blue Green Deploy**: Set traffic shift % (e.g., 20%)
-   - **ASG Blue Green Swap**: Shifts 100% to new ASG
-
-### Values from harness-config.txt
-
-| Harness Field | Value From |
-|---------------|------------|
-| Prod Listener ARN | `PROD_LISTENER_ARN` |
-| Prod Listener Rule ARN | `PROD_LISTENER_RULE_ARN` |
-| Stage Listener ARN | `STAGE_LISTENER_ARN` |
-| Stage Listener Rule ARN | `STAGE_LISTENER_RULE_ARN` |
-| Prod Target Group ARN | `PROD_TARGET_GROUP_ARN` |
-| Stage Target Group ARN | `STAGE_TARGET_GROUP_ARN` |
+</details>
 
 ## Step 4: Run Pipeline
 
@@ -209,46 +224,59 @@ This creates:
 - Lambda function with `live` alias
 - Public Function URL
 
-## Step 2: Configure Harness
+## Step 2: Configure Harness (Automated)
 
-### Create AWS Connector
+The Harness Terraform module creates all entities automatically:
+
+```bash
+# Switch to POV and apply (if not already done for ASG)
+./switch-pov.sh <pov-name>
+cd infra/terraform-harness
+terraform init && terraform apply
+```
+
+This creates:
+- AWS Connector (IRSA-based)
+- Lambda Service with manifests and ECR artifact
+- Lambda Infrastructure Definition
+- Lambda Canary Pipeline
+
+### Manual Setup (Alternative)
+
+<details>
+<summary>Click to expand manual Harness setup steps</summary>
+
+#### Create AWS Connector
 1. **Project Settings → Connectors → New Connector → AWS**
 2. Name: `aws-lambda`
 3. Credentials: **Use IRSA** or **Assume Role**
 4. Test connection
 
-### Create Service
+#### Create Service
 1. **Services → New Service**
 2. Name: `spring-boot-lambda`
 3. Deployment Type: **AWS Lambda**
 4. **Manifests** (from repo):
-   - Function Definition: `/infra/harness/lambda/function-definition.yaml`
-   - Alias Definition: `/infra/harness/lambda/alias-definition.yaml`
+   - Function Definition: `/infra/harness/lambda/function-definition.json`
+   - Alias Definition: `/infra/harness/lambda/alias-definition.json`
 5. **Artifacts**:
    - Type: **ECR**
    - Connector: `aws-lambda`
    - Region: `us-east-1`
-   - Image Path: `<PROJECT_NAME>` (e.g., `spring-boot-hello-world`)
+   - Image Path: `<PROJECT_NAME>`
    - Tag: Runtime Input
 
-### Create Environment
-1. **Environments → New Environment**
-2. Name: `dev`
-3. Type: **Pre-Production**
+#### Create Environment & Infrastructure
+1. **Environments → New Environment** → Name: `dev`, Type: **Pre-Production**
+2. **New Infrastructure** → Type: **AWS Lambda**
+3. Connector: `aws-lambda`, Region: `us-east-1`
 
-### Create Infrastructure Definition
-1. In the environment, **New Infrastructure**
-2. Name: `aws-lambda-infra`
-3. Type: **AWS Lambda**
-4. Connector: `aws-lambda`
-5. Region: `us-east-1`
+#### Create Pipeline
+1. **Pipelines → New Pipeline** → Name: `Lambda Canary Deploy`
+2. Add Stage: **Deploy → AWS Lambda**
+3. Deployment Strategy: **Canary**
 
-### Create Pipeline
-1. **Pipelines → New Pipeline**
-2. Name: `Lambda Canary Deploy`
-3. Add Stage: **Deploy → AWS Lambda**
-4. Deployment Strategy: **Canary** or **Basic**
-5. For Canary, configure traffic shift percentages
+</details>
 
 ### Lambda Canary Steps
 
@@ -256,8 +284,6 @@ This creates:
 |------|------------------------|
 | Deploy | 0% (new version created) |
 | Shift 10% | 10% |
-| Approval | Manual gate |
-| Shift 50% | 50% |
 | Approval | Manual gate |
 | Shift 100% | 100% |
 

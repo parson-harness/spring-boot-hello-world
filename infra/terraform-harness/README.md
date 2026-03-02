@@ -29,30 +29,39 @@ Terraform module to create all Harness entities needed for the POV demo.
 
 ## Usage
 
+### Recommended: Use POV Scripts
+
+```bash
+# 1. Setup POV (creates backend config, tfvars template, .env file)
+./setup-pov.sh
+# Enter POV name when prompted
+
+# 2. Edit Harness config
+vi infra/terraform-harness/terraform.tfvars.<pov-name>
+
+# 3. Deploy AWS infrastructure
+./deploy-asg.sh deploy    # For ASG Blue-Green
+./deploy-lambda.sh deploy # For Lambda Canary
+
+# 4. Auto-populate AWS values into tfvars
+./update-harness-tfvars.sh <pov-name>
+
+# 5. Switch to POV and apply
+./switch-pov.sh <pov-name>
+cd infra/terraform-harness
+terraform init && terraform apply
+```
+
+### Manual Setup
+
 ```bash
 cd infra/terraform-harness
 
-# Create terraform.tfvars
-cat > terraform.tfvars <<EOF
-harness_account_id = "your-account-id"
-harness_api_key    = "your-api-key"
-org_identifier     = "default"
-project_identifier = "spring_boot_pov"
-environment        = "dev"
-aws_region         = "us-east-1"
+# Create terraform.tfvars from example
+cp terraform.tfvars.example terraform.tfvars
 
-# Delegate selector (must match your delegate)
-delegate_selectors = ["harness-delegate"]
-
-# GitHub repo for manifests
-github_connector_ref = "account.github"
-github_repo          = "your-org/spring-boot-hello-world"
-
-# Enable/disable deployment types
-enable_asg    = true
-enable_lambda = true
-enable_eks    = true
-EOF
+# Edit with your values
+vi terraform.tfvars
 
 # Initialize and apply
 terraform init
@@ -83,23 +92,31 @@ terraform apply
 | `aws_connector_type` | `irsa` | `irsa` or `manual` |
 | `delegate_selectors` | `["harness-delegate"]` | Delegate tags |
 
+### ASG Infrastructure Values (Auto-populated by `update-harness-tfvars.sh`)
+
+| Variable | Description |
+|----------|-------------|
+| `asg_security_group_id` | Security group for ASG instances |
+| `asg_subnet_ids` | Comma-separated subnet IDs |
+| `alb_name` | ALB name for Blue-Green |
+| `prod_listener_arn` | Production listener ARN |
+| `prod_listener_rule_arn` | Production listener rule ARN |
+| `stage_listener_arn` | Stage listener ARN |
+| `stage_listener_rule_arn` | Stage listener rule ARN |
+
 ## After Provisioning
 
-1. **Import pipelines** from `infra/harness/pipelines/`:
-   ```
-   asg-blue-green.yaml
-   lambda-canary.yaml
-   k8s-canary.yaml
-   ```
+Pipelines are created automatically by Terraform. No manual import needed.
 
-2. **Build artifacts** using deploy scripts:
-   ```bash
-   ./deploy-asg.sh v1.0-blue      # Builds AMI
-   ./deploy-lambda.sh v1.0-blue   # Builds Lambda image
-   ./deploy-eks.sh v1.0-blue      # Builds K8s image
-   ```
+**Run pipelines** in Harness:
+- `asg_blue_green_deploy` - ASG Blue-Green deployment
+- `lambda_canary_deploy` - Lambda Canary deployment
 
-3. **Run pipelines** in Harness with the built artifacts
+**Build new artifacts** using deploy scripts:
+```bash
+./deploy-asg.sh deploy      # Builds new AMI
+./deploy-lambda.sh push     # Builds and pushes Lambda image
+```
 
 ## Cleanup
 

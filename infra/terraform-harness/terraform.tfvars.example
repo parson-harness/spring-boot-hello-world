@@ -38,3 +38,9 @@ enable_eks    = true
 
 # Kubernetes Configuration (only if enable_eks = true)
 k8s_namespace = "default"
+
+# ASG Infrastructure Values (from AWS Terraform outputs)
+# Run: cd ../terraform && terraform output
+# Leave empty to use runtime inputs in Harness
+asg_security_group_id = ""  # e.g., "sg-01420f751396ce5d6"
+asg_subnet_ids        = ""  # e.g., "subnet-abc123,subnet-def456"

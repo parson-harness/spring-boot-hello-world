@@ -231,10 +231,10 @@ resource "harness_platform_service" "asg" {
               value: ${var.project_name}
             - name: security_group_id
               type: String
-              value: <+input>
+              value: ${var.asg_security_group_id != "" ? var.asg_security_group_id : "<+input>"}
             - name: subnet_ids
               type: String
-              value: <+input>
+              value: ${var.asg_subnet_ids != "" ? var.asg_subnet_ids : "<+input>"}
           manifests:
             - manifest:
                 identifier: launchTemplate
@@ -521,11 +521,11 @@ resource "harness_platform_pipeline" "asg" {
                       timeout: 10m
                       spec:
                         useAlreadyRunningInstances: false
-                        loadBalancer: <+input>
-                        prodListener: <+input>
-                        prodListenerRuleArn: <+input>
-                        stageListener: <+input>
-                        stageListenerRuleArn: <+input>
+                        loadBalancer: ${var.alb_name != "" ? var.alb_name : "<+input>"}
+                        prodListener: ${var.prod_listener_arn != "" ? var.prod_listener_arn : "<+input>"}
+                        prodListenerRuleArn: ${var.prod_listener_rule_arn != "" ? var.prod_listener_rule_arn : "<+input>"}
+                        stageListener: ${var.stage_listener_arn != "" ? var.stage_listener_arn : "<+input>"}
+                        stageListenerRuleArn: ${var.stage_listener_rule_arn != "" ? var.stage_listener_rule_arn : "<+input>"}
                   - step:
                       name: Approval
                       identifier: approval
