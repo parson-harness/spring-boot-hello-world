@@ -1,7 +1,7 @@
 {
   "LaunchTemplateData": {
     "InstanceType": "t3.micro",
-    "SecurityGroupIds": ["sg-0b1cd04640f32af61"],
+    "SecurityGroupIds": ["<+serviceVariables.security_group_id>"],
     "BlockDeviceMappings": [
       {
         "DeviceName": "/dev/xvda",
@@ -18,11 +18,11 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "spring-boot-hello-world"
+            "Value": "<+serviceVariables.app_name>"
           },
           {
             "Key": "Application",
-            "Value": "spring-boot-hello-world"
+            "Value": "<+serviceVariables.app_name>"
           }
         ]
       }

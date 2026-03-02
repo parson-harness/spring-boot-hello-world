@@ -44,7 +44,7 @@ locals {
 # =============================================================================
 resource "harness_platform_connector_aws" "aws" {
   identifier  = "aws_${local.env_id}"
-  name        = "AWS Lambda"
+  name        = "AWS ${title(var.environment)}"
   description = "AWS connector for ${var.environment} deployments"
   org_id      = var.org_identifier
   project_id  = local.project_id
@@ -137,10 +137,12 @@ resource "harness_platform_infrastructure" "asg" {
       orgIdentifier: ${var.org_identifier}
       projectIdentifier: ${local.project_id}
       environmentRef: ${local.env_id}
+      deploymentType: Asg
       type: Asg
       spec:
         connectorRef: ${harness_platform_connector_aws.aws.identifier}
         region: ${var.aws_region}
+      allowSimultaneousDeployments: false
   EOT
 }
 
@@ -223,6 +225,16 @@ resource "harness_platform_service" "asg" {
       serviceDefinition:
         type: Asg
         spec:
+          variables:
+            - name: app_name
+              type: String
+              value: ${var.project_name}
+            - name: security_group_id
+              type: String
+              value: <+input>
+            - name: subnet_ids
+              type: String
+              value: <+input>
           manifests:
             - manifest:
                 identifier: launchTemplate
@@ -232,6 +244,7 @@ resource "harness_platform_service" "asg" {
                     type: Github
                     spec:
                       connectorRef: ${var.github_connector_ref}
+                      gitFetchType: Branch
                       repoName: ${var.github_repo}
                       branch: main
                       paths:
@@ -244,22 +257,11 @@ resource "harness_platform_service" "asg" {
                     type: Github
                     spec:
                       connectorRef: ${var.github_connector_ref}
+                      gitFetchType: Branch
                       repoName: ${var.github_repo}
                       branch: main
                       paths:
                         - infra/harness/asg/asg-config.json
-            - manifest:
-                identifier: userData
-                type: AsgUserData
-                spec:
-                  store:
-                    type: Github
-                    spec:
-                      connectorRef: ${var.github_connector_ref}
-                      repoName: ${var.github_repo}
-                      branch: main
-                      paths:
-                        - infra/harness/asg/user-data.sh
           artifacts:
             primary:
               primaryArtifactRef: <+input>
@@ -269,8 +271,9 @@ resource "harness_platform_service" "asg" {
                   spec:
                     connectorRef: ${harness_platform_connector_aws.aws.identifier}
                     region: ${var.aws_region}
-                    tags:
-                      Application: ${var.project_name}
+                    filters:
+                      - name: tag:Application
+                        value: ${var.project_name}
                     version: <+input>
   EOT
 }
@@ -455,6 +458,102 @@ resource "harness_platform_pipeline" "lambda" {
                       name: Lambda Rollback
                       identifier: lambda_rollback
                       type: AwsLambdaRollback
+                      timeout: 10m
+                      spec: {}
+            tags: {}
+            failureStrategies:
+              - onFailure:
+                  errors:
+                    - AllErrors
+                  action:
+                    type: StageRollback
+  EOT
+}
+
+# ASG Blue-Green Pipeline
+resource "harness_platform_pipeline" "asg" {
+  count       = var.enable_asg ? 1 : 0
+  identifier  = "asg_blue_green_deploy"
+  name        = "ASG Blue-Green Deploy"
+  org_id      = var.org_identifier
+  project_id  = local.project_id
+
+  yaml = <<-EOT
+    pipeline:
+      name: ASG Blue-Green Deploy
+      identifier: asg_blue_green_deploy
+      projectIdentifier: ${local.project_id}
+      orgIdentifier: ${var.org_identifier}
+      description: |
+        Deploys Spring Boot app to ASG using Blue-Green strategy.
+        - Creates new ASG with new AMI
+        - Shifts traffic via ALB target groups
+        - Supports instant rollback
+      stages:
+        - stage:
+            name: Deploy to Dev
+            identifier: deploy_to_dev
+            description: Blue-Green deployment to ASG
+            type: Deployment
+            spec:
+              deploymentType: Asg
+              service:
+                serviceRef: ${harness_platform_service.asg[0].identifier}
+                serviceInputs:
+                  serviceDefinition:
+                    type: Asg
+                    spec:
+                      artifacts:
+                        primary:
+                          primaryArtifactRef: <+input>
+                          sources: <+input>
+              environment:
+                environmentRef: ${harness_platform_environment.env.identifier}
+                deployToAll: false
+                infrastructureDefinitions:
+                  - identifier: ${harness_platform_infrastructure.asg[0].identifier}
+              execution:
+                steps:
+                  - step:
+                      name: ASG Blue Green Deploy
+                      identifier: asg_blue_green_deploy
+                      type: AsgBlueGreenDeploy
+                      timeout: 10m
+                      spec:
+                        useAlreadyRunningInstances: false
+                        loadBalancer: <+input>
+                        prodListener: <+input>
+                        prodListenerRuleArn: <+input>
+                        stageListener: <+input>
+                        stageListenerRuleArn: <+input>
+                  - step:
+                      name: Approval
+                      identifier: approval
+                      type: HarnessApproval
+                      timeout: 1d
+                      spec:
+                        approvalMessage: |
+                          Blue-Green deployment complete. Stage ASG is running with new AMI.
+                          Review metrics and logs before swapping to production.
+                          Approve to shift all traffic to new version.
+                        includePipelineExecutionHistory: true
+                        approvers:
+                          userGroups:
+                            - _project_all_users
+                          minimumCount: 1
+                          disallowPipelineExecutor: false
+                  - step:
+                      name: ASG Blue Green Swap
+                      identifier: asg_blue_green_swap
+                      type: AsgBlueGreenSwapService
+                      timeout: 10m
+                      spec:
+                        downsizeOldAsg: true
+                rollbackSteps:
+                  - step:
+                      name: ASG Blue Green Rollback
+                      identifier: asg_blue_green_rollback
+                      type: AsgBlueGreenRollback
                       timeout: 10m
                       spec: {}
             tags: {}

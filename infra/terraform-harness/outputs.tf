@@ -53,6 +53,11 @@ output "lambda_pipeline_id" {
   value       = var.enable_lambda ? harness_platform_pipeline.lambda[0].identifier : null
 }
 
+output "asg_pipeline_id" {
+  description = "ASG pipeline identifier"
+  value       = var.enable_asg ? harness_platform_pipeline.asg[0].identifier : null
+}
+
 output "k8s_pipeline_id" {
   description = "Kubernetes pipeline identifier"
   value       = var.enable_eks ? harness_platform_pipeline.k8s[0].identifier : null
@@ -65,12 +70,14 @@ output "next_steps" {
     Harness entities created! Next steps:
     
     1. Build artifacts:
-       - Lambda: ./deploy-lambda.sh v1.0-blue (builds and pushes image)
+       - ASG: ./deploy-asg.sh deploy (builds AMI and deploys infra)
+       - Lambda: ./deploy-lambda.sh push (builds and pushes image)
        - K8s: ./deploy-eks.sh v1.0-blue (builds and pushes image)
     
     2. Run the pipeline in Harness:
-       - Lambda: ${var.enable_lambda ? harness_platform_pipeline.lambda[0].identifier : "N/A"}
-       - K8s: ${var.enable_eks ? harness_platform_pipeline.k8s[0].identifier : "N/A"}
+       - ASG: ${var.enable_asg ? "asg_blue_green_deploy" : "N/A"}
+       - Lambda: ${var.enable_lambda ? "lambda_canary_deploy" : "N/A"}
+       - K8s: ${var.enable_eks ? "k8s_canary_deploy" : "N/A"}
     
     3. Select artifact version when prompted
     
