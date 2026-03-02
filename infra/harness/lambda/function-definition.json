@@ -1,6 +1,6 @@
 {
-  "functionName": "spring-boot-hello-world",
-  "role": "arn:aws:iam::759984737373:role/spring-boot-hello-world-lambda-role",
+  "functionName": "<+serviceVariables.function_name>",
+  "role": "<+infra.variables.lambda_role_arn>",
   "packageType": "Image",
   "memorySize": 1024,
   "timeout": 30

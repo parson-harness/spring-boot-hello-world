@@ -37,6 +37,11 @@ variable "project_name" {
   default     = "spring-boot-hello-world"
 }
 
+variable "aws_account_id" {
+  description = "AWS Account ID for IAM role ARN construction"
+  type        = string
+}
+
 variable "create_project" {
   description = "Whether to create a new Harness project"
   type        = bool

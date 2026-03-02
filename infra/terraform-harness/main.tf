@@ -167,6 +167,10 @@ resource "harness_platform_infrastructure" "lambda" {
       spec:
         connectorRef: ${harness_platform_connector_aws.aws.identifier}
         region: ${var.aws_region}
+      variables:
+        - name: lambda_role_arn
+          type: String
+          value: arn:aws:iam::${var.aws_account_id}:role/${var.project_name}-lambda-role
       allowSimultaneousDeployments: false
   EOT
 }
@@ -287,6 +291,10 @@ resource "harness_platform_service" "lambda" {
       serviceDefinition:
         type: AwsLambda
         spec:
+          variables:
+            - name: function_name
+              type: String
+              value: ${var.project_name}
           manifests:
             - manifest:
                 identifier: functionDefinition

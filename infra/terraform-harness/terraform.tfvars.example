@@ -11,6 +11,10 @@ create_project     = false  # Set to true to create a new project
 environment = "dev"
 aws_region  = "us-east-1"
 
+# AWS Configuration
+aws_account_id = "123456789012"  # Your AWS account ID
+project_name   = "tr-hello-world"  # Must match PROJECT_NAME used in deploy scripts
+
 # Delegate Configuration
 delegate_selectors = ["harness-delegate"]
 

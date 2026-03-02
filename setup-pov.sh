@@ -25,6 +25,14 @@ fi
 # Sanitize POV name (lowercase, replace spaces with dashes)
 POV_NAME=$(echo "$POV_NAME" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
 
+# Get AWS Account ID
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null)
+if [ -z "$AWS_ACCOUNT_ID" ]; then
+    echo -e "${RED}Could not get AWS Account ID. Make sure AWS CLI is configured.${NC}"
+    exit 1
+fi
+echo -e "${GREEN}Using AWS Account: ${AWS_ACCOUNT_ID}${NC}"
+
 echo ""
 echo -e "${YELLOW}Setting up POV: ${POV_NAME}${NC}"
 echo ""
@@ -57,6 +65,10 @@ if [ -f "$TFVARS_FILE" ]; then
 else
     echo -e "${YELLOW}Creating Harness tfvars...${NC}"
     cp "$SCRIPT_DIR/infra/terraform-harness/terraform.tfvars.example" "$TFVARS_FILE"
+    # Update with detected values
+    sed -i.bak "s/aws_account_id = \"123456789012\"/aws_account_id = \"${AWS_ACCOUNT_ID}\"/" "$TFVARS_FILE"
+    sed -i.bak "s/project_name   = \"tr-hello-world\"/project_name   = \"${POV_NAME}-hello-world\"/" "$TFVARS_FILE"
+    rm -f "$TFVARS_FILE.bak"
     echo -e "${GREEN}✓ Created: infra/terraform-harness/terraform.tfvars.${POV_NAME}${NC}"
     echo -e "${BLUE}  → Edit this file with your Harness account details${NC}"
 fi
