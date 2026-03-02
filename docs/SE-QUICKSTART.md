@@ -43,12 +43,21 @@ terraform init && terraform apply
 See `infra/terraform-harness/README.md` for details.
 
 ### Remote State (Default)
-Terraform state is stored in S3 by default for easy teardown after POV:
-- State bucket: `spring-boot-hello-world-terraform-state-dev`
-- State files: `asg/`, `lambda/`, `eks/` (separate per module)
-- Locking: DynamoDB table for concurrent access
+Terraform state is stored in S3 for easy teardown after POV. The deploy scripts auto-create `infra/backend.hcl` on first run.
 
-The deploy scripts automatically create the S3 bucket and DynamoDB table on first run.
+**Running Multiple POVs:**
+You can run your personal sandbox AND customer POVs from the same repo:
+```bash
+# Create separate backend configs
+cp infra/backend.hcl.example infra/backend-sandbox.hcl   # Your sandbox
+cp infra/backend.hcl.example infra/backend-acme.hcl      # Customer POV
+
+# Edit each with unique bucket names, then symlink the active one:
+ln -sf backend-sandbox.hcl infra/backend.hcl   # Switch to sandbox
+ln -sf backend-acme.hcl infra/backend.hcl      # Switch to customer
+
+# Re-init after switching: terraform init -reconfigure -backend-config=../backend.hcl
+```
 
 ---
 

@@ -131,11 +131,34 @@ build_app() {
     echo ""
 }
 
+# Ensure backend.hcl exists
+ensure_backend_config() {
+    local backend_config="$SCRIPT_DIR/infra/backend.hcl"
+    
+    if [ ! -f "$backend_config" ]; then
+        echo -e "${YELLOW}Creating backend.hcl from example...${NC}"
+        cp "$SCRIPT_DIR/infra/backend.hcl.example" "$backend_config"
+        echo -e "${BLUE}  Edit infra/backend.hcl to customize for your POV${NC}"
+    fi
+}
+
 # Deploy Terraform state backend
 deploy_bootstrap() {
-    echo -e "${YELLOW}Step 2: Deploying Terraform state backend...${NC}"
-    cd "$SCRIPT_DIR/infra/terraform-bootstrap"
+    ensure_backend_config
     
+    echo -e "${YELLOW}Step 2: Deploying Terraform state backend...${NC}"
+    
+    # Get bucket name from backend.hcl
+    local bucket_name=$(grep '^bucket' "$SCRIPT_DIR/infra/backend.hcl" | sed 's/.*=.*"\(.*\)"/\1/')
+    
+    # Check if S3 bucket already exists
+    if aws s3api head-bucket --bucket "$bucket_name" 2>/dev/null; then
+        echo -e "${GREEN}✓ State backend already exists${NC}"
+        echo ""
+        return
+    fi
+    
+    cd "$SCRIPT_DIR/infra/terraform-bootstrap"
     terraform init -input=false > /dev/null
     terraform apply -auto-approve -input=false
     
@@ -156,7 +179,7 @@ deploy_infrastructure() {
         fi
     fi
     
-    terraform init -input=false > /dev/null
+    terraform init -input=false -backend-config="$SCRIPT_DIR/infra/backend.hcl" > /dev/null
     terraform apply -auto-approve -input=false -var "app_name=$PROJECT_NAME" -var "environment=$ENVIRONMENT" -var "aws_region=$AWS_REGION" -var "owner=$OWNER"
     
     echo -e "${GREEN}✓ Infrastructure deployed${NC}"
@@ -379,8 +402,13 @@ empty_s3_bucket() {
 cleanup() {
     echo -e "${YELLOW}Cleaning up AWS resources...${NC}"
     
-    # Empty S3 buckets before destroying (Terraform can't delete non-empty buckets)
+    # Initialize with backend config
     cd "$SCRIPT_DIR/infra/terraform"
+    if [ -f "$SCRIPT_DIR/infra/backend.hcl" ]; then
+        terraform init -input=false -backend-config="$SCRIPT_DIR/infra/backend.hcl" > /dev/null 2>&1 || true
+    fi
+    
+    # Empty S3 buckets before destroying (Terraform can't delete non-empty buckets)
     if terraform state list &> /dev/null; then
         # Get artifacts bucket name from state directly
         ARTIFACTS_BUCKET=$(terraform state show aws_s3_bucket.artifacts 2>/dev/null | grep "bucket " | head -1 | awk -F'"' '{print $2}' || true)

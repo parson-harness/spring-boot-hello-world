@@ -81,7 +81,17 @@ check_prereqs() {
 
 # Ensure Terraform state backend exists (S3 + DynamoDB)
 ensure_backend() {
-    local bucket_name="spring-boot-hello-world-terraform-state-dev"
+    local backend_config="$SCRIPT_DIR/infra/backend.hcl"
+    
+    # Check if backend.hcl exists
+    if [ ! -f "$backend_config" ]; then
+        echo -e "${YELLOW}Creating backend.hcl from example...${NC}"
+        cp "$SCRIPT_DIR/infra/backend.hcl.example" "$backend_config"
+        echo -e "${BLUE}  Edit infra/backend.hcl to customize for your POV${NC}"
+    fi
+    
+    # Get bucket name from backend.hcl
+    local bucket_name=$(grep '^bucket' "$backend_config" | sed 's/.*=.*"\(.*\)"/\1/')
     
     # Check if S3 bucket exists
     if ! aws s3api head-bucket --bucket "$bucket_name" 2>/dev/null; then
@@ -110,7 +120,7 @@ deploy_ecr() {
     echo -e "${YELLOW}Step 2: Creating ECR repository...${NC}"
     cd "$SCRIPT_DIR/infra/terraform-lambda"
     
-    terraform init -input=false > /dev/null
+    terraform init -input=false -backend-config="$SCRIPT_DIR/infra/backend.hcl" > /dev/null
     terraform apply -auto-approve -input=false \
         -var "app_name=$PROJECT_NAME" \
         -var "environment=$ENVIRONMENT" \
@@ -231,27 +241,28 @@ destroy() {
     
     cd "$SCRIPT_DIR/infra/terraform-lambda"
     
-    if [ -f "terraform.tfstate" ]; then
-        # Delete all images from ECR first
-        ECR_REPO=$(terraform output -raw ecr_repository_name 2>/dev/null || echo "")
-        if [ -n "$ECR_REPO" ]; then
-            echo -e "${BLUE}  Deleting ECR images...${NC}"
-            aws ecr batch-delete-image \
-                --repository-name "$ECR_REPO" \
-                --image-ids "$(aws ecr list-images --repository-name "$ECR_REPO" --query 'imageIds[*]' --output json)" \
-                --region "$AWS_REGION" 2>/dev/null || true
-        fi
-        
-        terraform destroy -auto-approve -input=false \
-            -var "app_name=$PROJECT_NAME" \
-            -var "environment=$ENVIRONMENT" \
-            -var "aws_region=$AWS_REGION" \
-            -var "owner=$OWNER"
-        
-        echo -e "${GREEN}✓ Lambda infrastructure destroyed${NC}"
-    else
-        echo -e "${YELLOW}No Terraform state found. Nothing to destroy.${NC}"
+    # Initialize with backend config
+    if [ -f "$SCRIPT_DIR/infra/backend.hcl" ]; then
+        terraform init -input=false -backend-config="$SCRIPT_DIR/infra/backend.hcl" > /dev/null 2>&1 || true
     fi
+    
+    # Delete all images from ECR first
+    ECR_REPO=$(terraform output -raw ecr_repository_name 2>/dev/null || echo "")
+    if [ -n "$ECR_REPO" ]; then
+        echo -e "${BLUE}  Deleting ECR images...${NC}"
+        aws ecr batch-delete-image \
+            --repository-name "$ECR_REPO" \
+            --image-ids "$(aws ecr list-images --repository-name "$ECR_REPO" --query 'imageIds[*]' --output json)" \
+            --region "$AWS_REGION" 2>/dev/null || true
+    fi
+    
+    terraform destroy -auto-approve -input=false \
+        -var "app_name=$PROJECT_NAME" \
+        -var "environment=$ENVIRONMENT" \
+        -var "aws_region=$AWS_REGION" \
+        -var "owner=$OWNER"
+    
+    echo -e "${GREEN}✓ Lambda infrastructure destroyed${NC}"
 }
 
 # Main

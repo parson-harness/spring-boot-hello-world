@@ -1,0 +1,15 @@
+# Terraform Backend Configuration
+# Copy this file to backend.hcl and customize for your POV
+#
+# Usage: terraform init -backend-config=../backend.hcl
+#
+# For multiple POVs, create separate backend.hcl files:
+#   - backend-sandbox.hcl (your personal sandbox)
+#   - backend-acme.hcl (customer POV)
+#
+# Then init with: terraform init -backend-config=../backend-acme.hcl
+
+bucket         = "spring-boot-hello-world-terraform-state-dev"
+region         = "us-east-1"
+dynamodb_table = "spring-boot-hello-world-terraform-locks-dev"
+encrypt        = true

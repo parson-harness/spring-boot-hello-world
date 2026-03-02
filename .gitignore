@@ -43,6 +43,9 @@ Thumbs.db
 *.tfstate.*
 *.tfvars
 !*.tfvars.example
+backend.hcl
+backend-*.hcl
+!backend.hcl.example
 .terraform.lock.hcl
 crash.log
 override.tf

@@ -1,9 +1,8 @@
+# Backend configuration is provided via backend.hcl file
+# This allows multiple POVs to use different state buckets
+# See backend.hcl.example for configuration options
 terraform {
   backend "s3" {
-    bucket         = "spring-boot-hello-world-terraform-state-dev"
-    key            = "asg/terraform.tfstate"
-    region         = "us-east-1"
-    dynamodb_table = "spring-boot-hello-world-terraform-locks-dev"
-    encrypt        = true
+    key = "asg/terraform.tfstate"
   }
 }
