@@ -260,9 +260,6 @@ print_outputs() {
     
     # Save Harness config to file
     save_harness_config "$AMI_ID" "$ALB_DNS" "$S3_BUCKET" "$PROD_LISTENER" "$LISTENER_RULE"
-    
-    # Update Harness manifests with infrastructure values
-    update_harness_manifests
 }
 
 # Update Harness ASG manifests with actual values from Terraform
