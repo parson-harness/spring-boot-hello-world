@@ -59,6 +59,7 @@ packer_cache/
 
 # Environment
 .env
+.env.*
 .env.local
 .env.*.local
 *.pem
@@ -82,3 +83,5 @@ infra/terraform-delegate/terraform.tfstate*
 
 # Docker
 *.tar
+infra/terraform-harness/terraform.tfvars.parson
+infra/terraform-harness/terraform.tfvars.tr

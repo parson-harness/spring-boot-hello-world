@@ -4,6 +4,31 @@ This repo contains a Spring Boot sample app with infrastructure for multiple dep
 
 ---
 
+## Quick Start (New POV)
+
+```bash
+# 1. Run the setup script
+./setup-pov.sh
+# Enter POV name when prompted (e.g., "acme", "tr")
+
+# 2. Source environment variables
+source .env.<pov-name>
+
+# 3. Edit Harness config with your account details
+vi infra/terraform-harness/terraform.tfvars.<pov-name>
+cp infra/terraform-harness/terraform.tfvars.<pov-name> infra/terraform-harness/terraform.tfvars
+
+# 4. Deploy Lambda infrastructure + push image
+./deploy-lambda.sh push
+
+# 5. Create Harness entities
+cd infra/terraform-harness && terraform init && terraform apply
+
+# 6. Run pipeline in Harness UI
+```
+
+---
+
 ## Prerequisites
 
 - AWS account with PowerUser access
