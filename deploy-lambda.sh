@@ -233,6 +233,20 @@ print_outputs() {
     echo "  Function Name: $FUNCTION_NAME"
     echo "  Alias: live"
     echo ""
+    
+    # Get POV name from backend symlink
+    POV_NAME=""
+    if [ -L "$SCRIPT_DIR/infra/backend.hcl" ]; then
+        POV_NAME=$(readlink "$SCRIPT_DIR/infra/backend.hcl" | sed 's/backend-//' | sed 's/\.hcl//')
+    fi
+    
+    echo -e "${YELLOW}Next step - Setup Harness entities:${NC}"
+    if [ -n "$POV_NAME" ]; then
+        echo "  ./setup-harness.sh $POV_NAME"
+    else
+        echo "  ./setup-harness.sh <pov-name>"
+    fi
+    echo ""
 }
 
 # Destroy infrastructure
@@ -290,7 +304,22 @@ case "${2:-${1:-}}" in
         
         echo -e "${GREEN}✓ Image ready for Harness deployment${NC}"
         echo ""
-        echo "Run the Lambda Canary pipeline in Harness and select tag: $IMAGE_TAG"
+        
+        # Get POV name from backend symlink
+        POV_NAME=""
+        if [ -L "$SCRIPT_DIR/infra/backend.hcl" ]; then
+            POV_NAME=$(readlink "$SCRIPT_DIR/infra/backend.hcl" | sed 's/backend-//' | sed 's/\.hcl//')
+        fi
+        
+        echo -e "${YELLOW}Next step - Setup Harness entities (if not done):${NC}"
+        if [ -n "$POV_NAME" ]; then
+            echo "  ./setup-harness.sh $POV_NAME"
+        else
+            echo "  ./setup-harness.sh <pov-name>"
+        fi
+        echo ""
+        echo -e "${YELLOW}Then run the Lambda Canary pipeline in Harness:${NC}"
+        echo "  Select artifact tag: $IMAGE_TAG"
         ;;
     infra)
         # Create infrastructure only

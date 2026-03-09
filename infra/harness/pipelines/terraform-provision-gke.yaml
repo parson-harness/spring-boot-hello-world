@@ -1,0 +1,232 @@
+pipeline:
+  name: Terraform Provision GKE
+  identifier: terraform_provision_gke
+  projectIdentifier: <+input>
+  orgIdentifier: <+input>
+  description: |
+    Provisions GKE infrastructure using Terraform.
+    - Creates GKE cluster with Workload Identity
+    - Creates Artifact Registry for container images
+    - Configures node pool with autoscaling
+    
+    Prerequisites:
+    - GCP connector configured in Harness
+    - Delegate with GCP access (Workload Identity or SA Key)
+  tags:
+    type: infrastructure
+    cloud: gcp
+    tool: terraform
+  properties:
+    ci:
+      codebase:
+        connectorRef: <+input>
+        repoName: spring-boot-hello-world
+        build: <+input>
+  stages:
+    - stage:
+        name: Terraform Plan
+        identifier: terraform_plan
+        description: Run terraform plan to preview changes
+        type: Custom
+        spec:
+          execution:
+            steps:
+              - step:
+                  name: Terraform Init
+                  identifier: terraform_init
+                  type: ShellScript
+                  timeout: 10m
+                  spec:
+                    shell: Bash
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          cd infra/terraform-gke
+                          
+                          echo "=== Terraform Init ==="
+                          terraform init \
+                            -backend-config="bucket=<+pipeline.variables.tf_state_bucket>" \
+                            -backend-config="prefix=terraform/state/<+pipeline.variables.environment>"
+                          
+                          echo "=== Terraform Validate ==="
+                          terraform validate
+                    environmentVariables:
+                      - name: GOOGLE_PROJECT
+                        type: String
+                        value: <+pipeline.variables.gcp_project>
+                    outputVariables: []
+                  failureStrategies: []
+              - step:
+                  name: Terraform Plan
+                  identifier: terraform_plan_step
+                  type: ShellScript
+                  timeout: 10m
+                  spec:
+                    shell: Bash
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          cd infra/terraform-gke
+                          
+                          echo "=== Creating tfvars ==="
+                          cat > terraform.tfvars <<EOF
+                          gcp_project_id = "<+pipeline.variables.gcp_project>"
+                          gcp_region     = "<+pipeline.variables.gcp_region>"
+                          project_name   = "<+pipeline.variables.project_name>"
+                          environment    = "<+pipeline.variables.environment>"
+                          owner          = "<+pipeline.variables.owner>"
+                          machine_type   = "<+pipeline.variables.machine_type>"
+                          node_count     = <+pipeline.variables.node_count>
+                          preemptible    = <+pipeline.variables.preemptible>
+                          EOF
+                          
+                          echo "=== Terraform Plan ==="
+                          terraform plan -out=tfplan -input=false
+                          
+                          echo "=== Plan Summary ==="
+                          terraform show -no-color tfplan
+                    environmentVariables:
+                      - name: GOOGLE_PROJECT
+                        type: String
+                        value: <+pipeline.variables.gcp_project>
+                    outputVariables: []
+        tags: {}
+    - stage:
+        name: Approval
+        identifier: approval
+        description: Review terraform plan before applying
+        type: Approval
+        spec:
+          execution:
+            steps:
+              - step:
+                  name: Approve Terraform Apply
+                  identifier: approve_apply
+                  type: HarnessApproval
+                  timeout: 1d
+                  spec:
+                    approvalMessage: |
+                      Terraform plan completed for GKE infrastructure.
+                      
+                      Project: <+pipeline.variables.gcp_project>
+                      Region: <+pipeline.variables.gcp_region>
+                      Environment: <+pipeline.variables.environment>
+                      
+                      Review the plan output in the previous stage before approving.
+                    includePipelineExecutionHistory: true
+                    approvers:
+                      userGroups:
+                        - _project_all_users
+                      minimumCount: 1
+                      disallowPipelineExecutor: false
+        tags: {}
+    - stage:
+        name: Terraform Apply
+        identifier: terraform_apply
+        description: Apply terraform changes
+        type: Custom
+        spec:
+          execution:
+            steps:
+              - step:
+                  name: Terraform Apply
+                  identifier: terraform_apply_step
+                  type: ShellScript
+                  timeout: 30m
+                  spec:
+                    shell: Bash
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          cd infra/terraform-gke
+                          
+                          echo "=== Terraform Init ==="
+                          terraform init \
+                            -backend-config="bucket=<+pipeline.variables.tf_state_bucket>" \
+                            -backend-config="prefix=terraform/state/<+pipeline.variables.environment>"
+                          
+                          echo "=== Recreating tfvars ==="
+                          cat > terraform.tfvars <<EOF
+                          gcp_project_id = "<+pipeline.variables.gcp_project>"
+                          gcp_region     = "<+pipeline.variables.gcp_region>"
+                          project_name   = "<+pipeline.variables.project_name>"
+                          environment    = "<+pipeline.variables.environment>"
+                          owner          = "<+pipeline.variables.owner>"
+                          machine_type   = "<+pipeline.variables.machine_type>"
+                          node_count     = <+pipeline.variables.node_count>
+                          preemptible    = <+pipeline.variables.preemptible>
+                          EOF
+                          
+                          echo "=== Terraform Apply ==="
+                          terraform apply -auto-approve -input=false
+                          
+                          echo "=== Outputs ==="
+                          terraform output -json > /tmp/tf_outputs.json
+                          
+                          echo "Cluster Name: $(terraform output -raw cluster_name)"
+                          echo "Cluster Location: $(terraform output -raw cluster_location)"
+                          echo "Registry URL: $(terraform output -raw artifact_registry_url)"
+                          echo ""
+                          echo "Configure kubectl with:"
+                          terraform output -raw kubeconfig_command
+                    environmentVariables:
+                      - name: GOOGLE_PROJECT
+                        type: String
+                        value: <+pipeline.variables.gcp_project>
+                    outputVariables:
+                      - name: cluster_name
+                        type: String
+                        value: cluster_name
+                      - name: registry_url
+                        type: String
+                        value: registry_url
+        tags: {}
+  variables:
+    - name: gcp_project
+      type: String
+      description: GCP Project ID
+      required: true
+      value: <+input>
+    - name: gcp_region
+      type: String
+      description: GCP Region
+      required: true
+      value: <+input>.default(us-central1)
+    - name: tf_state_bucket
+      type: String
+      description: GCS bucket for Terraform state
+      required: true
+      value: <+input>
+    - name: project_name
+      type: String
+      description: Name for the GKE cluster and resources
+      required: true
+      value: <+input>.default(spring-boot-hello-world)
+    - name: environment
+      type: String
+      description: Environment name (dev, staging, prod)
+      required: true
+      value: <+input>.default(dev)
+    - name: owner
+      type: String
+      description: Owner name for resource tagging
+      required: true
+      value: <+input>
+    - name: machine_type
+      type: String
+      description: GKE node machine type
+      required: false
+      value: <+input>.default(e2-medium)
+    - name: node_count
+      type: Number
+      description: Initial node count
+      required: false
+      value: <+input>.default(1)
+    - name: preemptible
+      type: String
+      description: Use preemptible VMs (true/false)
+      required: false
+      value: <+input>.default(true)

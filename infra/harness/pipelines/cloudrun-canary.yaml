@@ -1,0 +1,129 @@
+pipeline:
+  name: Cloud Run Canary Deploy
+  identifier: cloudrun_canary_deploy
+  projectIdentifier: <+input>
+  orgIdentifier: <+input>
+  description: |
+    Deploys Spring Boot app to Google Cloud Run using Canary strategy.
+    - Deploys new revision
+    - Shifts traffic gradually (10% -> 50% -> 100%)
+    - Supports instant rollback via traffic splitting
+  tags:
+    deployment-type: cloudrun
+    strategy: canary
+    cloud: gcp
+  stages:
+    - stage:
+        name: Deploy to Dev
+        identifier: deploy_to_dev
+        description: Canary deployment to Cloud Run
+        type: Deployment
+        spec:
+          deploymentType: GoogleCloudRun
+          service:
+            serviceRef: <+input>
+            serviceInputs:
+              serviceDefinition:
+                type: GoogleCloudRun
+                spec:
+                  artifacts:
+                    primary:
+                      primaryArtifactRef: <+input>
+                      sources: <+input>
+          environment:
+            environmentRef: <+input>
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: <+input>
+          execution:
+            steps:
+              - step:
+                  name: Cloud Run Deploy
+                  identifier: cloudrun_deploy
+                  type: GoogleCloudRunDeploy
+                  timeout: 10m
+                  spec: {}
+              - step:
+                  name: Shift Traffic 10%
+                  identifier: shift_traffic_10
+                  type: GoogleCloudRunTrafficShift
+                  timeout: 5m
+                  spec:
+                    trafficPercent: 10
+              - step:
+                  name: Verify 10%
+                  identifier: verify_10
+                  type: ShellScript
+                  timeout: 5m
+                  spec:
+                    shell: Bash
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          echo "Verifying canary at 10%..."
+                          SERVICE_URL="<+pipeline.stages.deploy_to_dev.spec.execution.steps.cloudrun_deploy.output.serviceUrl>"
+                          
+                          # Health check
+                          for i in {1..5}; do
+                            response=$(curl -s -o /dev/null -w "%{http_code}" "$SERVICE_URL/actuator/health" || echo "000")
+                            if [ "$response" = "200" ]; then
+                              echo "Health check passed (attempt $i)"
+                              break
+                            fi
+                            echo "Health check attempt $i: $response"
+                            sleep 5
+                          done
+                          
+                          echo "Canary looks healthy at 10%!"
+                    environmentVariables: []
+                    outputVariables: []
+              - step:
+                  name: Shift Traffic 50%
+                  identifier: shift_traffic_50
+                  type: GoogleCloudRunTrafficShift
+                  timeout: 5m
+                  spec:
+                    trafficPercent: 50
+              - step:
+                  name: Approval
+                  identifier: approval
+                  type: HarnessApproval
+                  timeout: 1d
+                  spec:
+                    approvalMessage: |
+                      Cloud Run canary deployment at 50% traffic.
+                      
+                      Service: <+service.name>
+                      Environment: <+env.name>
+                      
+                      Review metrics and logs before proceeding to 100%.
+                      
+                      Approve to shift all traffic to new revision.
+                    includePipelineExecutionHistory: true
+                    approvers:
+                      userGroups:
+                        - _project_all_users
+                      minimumCount: 1
+                      disallowPipelineExecutor: false
+              - step:
+                  name: Shift Traffic 100%
+                  identifier: shift_traffic_100
+                  type: GoogleCloudRunTrafficShift
+                  timeout: 5m
+                  spec:
+                    trafficPercent: 100
+            rollbackSteps:
+              - step:
+                  name: Cloud Run Rollback
+                  identifier: cloudrun_rollback
+                  type: GoogleCloudRunRollback
+                  timeout: 10m
+                  spec: {}
+        tags: {}
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback

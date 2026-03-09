@@ -169,7 +169,7 @@ deploy_bootstrap() {
 # Deploy main infrastructure
 deploy_infrastructure() {
     echo -e "${YELLOW}Step 3: Deploying AWS infrastructure...${NC}"
-    cd "$SCRIPT_DIR/infra/terraform"
+    cd "$SCRIPT_DIR/infra/terraform-asg"
     
     # Copy example tfvars if not exists
     if [ ! -f "terraform.tfvars" ]; then
@@ -222,7 +222,7 @@ print_outputs() {
     echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
     echo ""
     
-    cd "$SCRIPT_DIR/infra/terraform"
+    cd "$SCRIPT_DIR/infra/terraform-asg"
     
     ALB_DNS=$(terraform output -raw alb_dns_name)
     S3_BUCKET=$(terraform output -raw s3_bucket_name)
@@ -260,13 +260,27 @@ print_outputs() {
     
     # Save Harness config to file
     save_harness_config "$AMI_ID" "$ALB_DNS" "$S3_BUCKET" "$PROD_LISTENER" "$LISTENER_RULE"
+    
+    # Get POV name from backend symlink
+    POV_NAME=""
+    if [ -L "$SCRIPT_DIR/infra/backend.hcl" ]; then
+        POV_NAME=$(readlink "$SCRIPT_DIR/infra/backend.hcl" | sed 's/backend-//' | sed 's/\.hcl//')
+    fi
+    
+    echo -e "${YELLOW}Next step - Setup Harness entities:${NC}"
+    if [ -n "$POV_NAME" ]; then
+        echo "  ./setup-harness.sh $POV_NAME"
+    else
+        echo "  ./setup-harness.sh <pov-name>"
+    fi
+    echo ""
 }
 
 # Update Harness ASG manifests with actual values from Terraform
 update_harness_manifests() {
     echo -e "${YELLOW}Updating Harness manifests with infrastructure values...${NC}"
     
-    cd "$SCRIPT_DIR/infra/terraform"
+    cd "$SCRIPT_DIR/infra/terraform-asg"
     
     # Get values from Terraform output
     SUBNET_IDS=$(terraform output -json private_subnet_ids 2>/dev/null | jq -r 'join(",")' || echo "")
@@ -400,7 +414,7 @@ cleanup() {
     echo -e "${YELLOW}Cleaning up AWS resources...${NC}"
     
     # Initialize with backend config
-    cd "$SCRIPT_DIR/infra/terraform"
+    cd "$SCRIPT_DIR/infra/terraform-asg"
     if [ -f "$SCRIPT_DIR/infra/backend.hcl" ]; then
         terraform init -input=false -backend-config="$SCRIPT_DIR/infra/backend.hcl" > /dev/null 2>&1 || true
     fi
@@ -446,7 +460,7 @@ fetch_config() {
     echo -e "${YELLOW}Fetching Harness configuration values...${NC}"
     echo ""
     
-    cd "$SCRIPT_DIR/infra/terraform"
+    cd "$SCRIPT_DIR/infra/terraform-asg"
     
     if ! terraform state list &> /dev/null; then
         echo -e "${RED}No Terraform state found. Run './deploy-asg.sh' first to deploy infrastructure.${NC}"

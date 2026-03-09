@@ -16,9 +16,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # =============================================================================
 PROJECT_NAME="${PROJECT_NAME:-spring-boot-hello-world}"
 OWNER="${OWNER:-unknown}"
-AWS_REGION="${AWS_REGION:-us-east-1}"
-AWS_PROFILE="${AWS_PROFILE:-default}"
-export AWS_PROFILE
+GCP_PROJECT="${GCP_PROJECT:-}"
+GCP_REGION="${GCP_REGION:-us-central1}"
 NAMESPACE="${NAMESPACE:-default}"
 IMAGE_TAG="${1:-latest}"
 
@@ -26,30 +25,32 @@ IMAGE_TAG="${1:-latest}"
 usage() {
     echo "Usage: $0 [image_tag] [command]"
     echo ""
-    echo "Builds and deploys the Spring Boot app to EKS."
+    echo "Builds and deploys the Spring Boot app to GKE."
     echo ""
     echo "Arguments:"
     echo "  image_tag    Tag for the container image (default: latest)"
     echo ""
     echo "Commands:"
-    echo "  (none)       Full deployment: build JAR, build image, push to ECR, deploy to EKS"
+    echo "  (none)       Full deployment: build JAR, build image, push to Artifact Registry, deploy to GKE"
     echo "  build        Build and push image only (no deploy)"
-    echo "  deploy       Deploy to EKS only (image must exist)"
-    echo "  destroy      Remove deployment from EKS"
+    echo "  deploy       Deploy to GKE only (image must exist)"
+    echo "  infra        Create GKE cluster infrastructure only"
+    echo "  destroy      Remove deployment from GKE (keeps cluster)"
+    echo "  destroy-all  Destroy GKE cluster and all resources"
     echo "  help         Show this help message"
     echo ""
     echo "Environment Variables:"
     echo "  PROJECT_NAME   Unique name for your project (default: spring-boot-hello-world)"
     echo "  OWNER          Your last name - used for labels (default: unknown)"
-    echo "  AWS_REGION     AWS region for ECR (default: us-east-1)"
+    echo "  GCP_PROJECT    GCP project ID (required)"
+    echo "  GCP_REGION     GCP region (default: us-central1)"
     echo "  NAMESPACE      Kubernetes namespace (default: default)"
     echo ""
     echo "Examples:"
-    echo "  $0                                    # Deploy with 'latest' tag"
-    echo "  $0 v1.0-blue                          # Deploy with specific tag"
-    echo "  PROJECT_NAME=acme-demo $0 v1.0.0      # Deploy with custom project name"
-    echo "  $0 build v1.0-blue                    # Build and push only"
-    echo "  $0 destroy                            # Remove from EKS"
+    echo "  GCP_PROJECT=my-project $0                    # Deploy with 'latest' tag"
+    echo "  GCP_PROJECT=my-project $0 v1.0-blue          # Deploy with specific tag"
+    echo "  GCP_PROJECT=my-project $0 infra              # Create GKE cluster only"
+    echo "  $0 destroy                                   # Remove from GKE"
 }
 
 # Check prerequisites
@@ -60,8 +61,9 @@ check_prereqs() {
     command -v java &> /dev/null || missing+=("java")
     command -v mvn &> /dev/null || missing+=("maven")
     command -v docker &> /dev/null || missing+=("docker")
-    command -v aws &> /dev/null || missing+=("aws-cli")
+    command -v gcloud &> /dev/null || missing+=("gcloud")
     command -v kubectl &> /dev/null || missing+=("kubectl")
+    command -v terraform &> /dev/null || missing+=("terraform")
     
     if [ ${#missing[@]} -ne 0 ]; then
         echo -e "${RED}Missing prerequisites: ${missing[*]}${NC}"
@@ -74,40 +76,88 @@ check_prereqs() {
         exit 1
     fi
     
-    # Check kubectl context
-    if ! kubectl cluster-info &> /dev/null; then
-        echo -e "${RED}kubectl not connected to a cluster. Configure your kubeconfig.${NC}"
-        exit 1
+    # Check GCP project is set
+    if [ -z "$GCP_PROJECT" ]; then
+        # Try to get from gcloud config
+        GCP_PROJECT=$(gcloud config get-value project 2>/dev/null || echo "")
+        if [ -z "$GCP_PROJECT" ]; then
+            echo -e "${RED}GCP_PROJECT not set. Set it with: export GCP_PROJECT=your-project-id${NC}"
+            exit 1
+        fi
+        echo -e "${BLUE}  Using GCP project from gcloud config: $GCP_PROJECT${NC}"
     fi
     
     echo -e "${GREEN}✓ All prerequisites met${NC}"
     echo ""
 }
 
-# Get or create ECR repository
-ensure_ecr_repo() {
-    echo -e "${YELLOW}Ensuring ECR repository exists...${NC}"
+# Check kubectl is connected to GKE
+check_kubectl() {
+    if ! kubectl cluster-info &> /dev/null; then
+        echo -e "${YELLOW}kubectl not connected. Configuring for GKE cluster...${NC}"
+        gcloud container clusters get-credentials "$PROJECT_NAME" --region "$GCP_REGION" --project "$GCP_PROJECT" 2>/dev/null || {
+            echo -e "${RED}Failed to connect to GKE cluster. Run './deploy-gke.sh infra' first to create the cluster.${NC}"
+            exit 1
+        }
+    fi
+    echo -e "${GREEN}✓ Connected to GKE cluster${NC}"
+}
+
+# Deploy GKE infrastructure
+deploy_infrastructure() {
+    echo -e "${YELLOW}Deploying GKE infrastructure...${NC}"
+    cd "$SCRIPT_DIR/infra/terraform-gke"
     
-    # Check if repo exists
-    if aws ecr describe-repositories --repository-names "$PROJECT_NAME" --region "$AWS_REGION" &> /dev/null; then
-        echo -e "${GREEN}✓ ECR repository exists${NC}"
-    else
-        echo -e "${BLUE}  Creating ECR repository...${NC}"
-        aws ecr create-repository \
-            --repository-name "$PROJECT_NAME" \
-            --region "$AWS_REGION" \
-            --image-scanning-configuration scanOnPush=true \
-            --tags Key=Project,Value="$PROJECT_NAME" Key=Owner,Value="$OWNER" > /dev/null
-        echo -e "${GREEN}✓ ECR repository created${NC}"
+    # Copy example tfvars if not exists
+    if [ ! -f "terraform.tfvars" ]; then
+        if [ -f "terraform.tfvars.example" ]; then
+            cp terraform.tfvars.example terraform.tfvars
+            echo -e "${BLUE}  Created terraform.tfvars from example${NC}"
+            echo -e "${YELLOW}  Please edit terraform.tfvars with your GCP project ID${NC}"
+        fi
     fi
     
-    # Get repository URL
-    ECR_REPO=$(aws ecr describe-repositories \
-        --repository-names "$PROJECT_NAME" \
-        --region "$AWS_REGION" \
-        --query 'repositories[0].repositoryUri' \
-        --output text)
+    # Update tfvars with current values
+    sed -i.bak "s/gcp_project_id = .*/gcp_project_id = \"$GCP_PROJECT\"/" terraform.tfvars
+    sed -i.bak "s/gcp_region = .*/gcp_region = \"$GCP_REGION\"/" terraform.tfvars
+    sed -i.bak "s/project_name = .*/project_name = \"$PROJECT_NAME\"/" terraform.tfvars
+    sed -i.bak "s/owner = .*/owner = \"$OWNER\"/" terraform.tfvars
+    rm -f terraform.tfvars.bak
     
+    terraform init -input=false
+    terraform apply -auto-approve -input=false
+    
+    # Configure kubectl
+    echo -e "${YELLOW}Configuring kubectl...${NC}"
+    eval "$(terraform output -raw kubeconfig_command)"
+    
+    echo -e "${GREEN}✓ GKE infrastructure deployed${NC}"
+    echo ""
+}
+
+# Get Artifact Registry URL
+get_registry_url() {
+    REGISTRY_URL="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${PROJECT_NAME}"
+}
+
+# Ensure Artifact Registry exists
+ensure_registry() {
+    echo -e "${YELLOW}Ensuring Artifact Registry exists...${NC}"
+    
+    # Check if registry exists
+    if gcloud artifacts repositories describe "$PROJECT_NAME" --location="$GCP_REGION" --project="$GCP_PROJECT" &> /dev/null; then
+        echo -e "${GREEN}✓ Artifact Registry exists${NC}"
+    else
+        echo -e "${BLUE}  Creating Artifact Registry...${NC}"
+        gcloud artifacts repositories create "$PROJECT_NAME" \
+            --repository-format=docker \
+            --location="$GCP_REGION" \
+            --project="$GCP_PROJECT" \
+            --description="Docker repository for $PROJECT_NAME"
+        echo -e "${GREEN}✓ Artifact Registry created${NC}"
+    fi
+    
+    get_registry_url
     echo ""
 }
 
@@ -125,32 +175,31 @@ build_and_push_image() {
     echo -e "${YELLOW}Step 2: Building and pushing container image...${NC}"
     cd "$SCRIPT_DIR"
     
-    # Login to ECR
-    aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REPO"
+    # Configure Docker for Artifact Registry
+    gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
     
-    # Build image (x86_64 for EKS)
+    # Build image (x86_64 for GKE)
     echo -e "${BLUE}  Building Docker image (linux/amd64)...${NC}"
     docker build --platform linux/amd64 -t "$PROJECT_NAME:$IMAGE_TAG" .
     
     # Tag and push
-    docker tag "$PROJECT_NAME:$IMAGE_TAG" "$ECR_REPO:$IMAGE_TAG"
-    echo -e "${BLUE}  Pushing to ECR...${NC}"
-    docker push "$ECR_REPO:$IMAGE_TAG"
+    docker tag "$PROJECT_NAME:$IMAGE_TAG" "$REGISTRY_URL/$PROJECT_NAME:$IMAGE_TAG"
+    echo -e "${BLUE}  Pushing to Artifact Registry...${NC}"
+    docker push "$REGISTRY_URL/$PROJECT_NAME:$IMAGE_TAG"
     
-    echo -e "${GREEN}✓ Image pushed: $ECR_REPO:$IMAGE_TAG${NC}"
+    echo -e "${GREEN}✓ Image pushed: $REGISTRY_URL/$PROJECT_NAME:$IMAGE_TAG${NC}"
     echo ""
 }
 
-# Deploy to EKS
-deploy_to_eks() {
-    echo -e "${YELLOW}Step 3: Deploying to EKS...${NC}"
+# Deploy to GKE
+deploy_to_gke() {
+    echo -e "${YELLOW}Step 3: Deploying to GKE...${NC}"
     cd "$SCRIPT_DIR"
     
     # Create namespace if it doesn't exist
     kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f - > /dev/null 2>&1
     
-    # Generate plain K8s manifests from templates (simple variable substitution)
-    local IMAGE="$ECR_REPO:$IMAGE_TAG"
+    local IMAGE="$REGISTRY_URL/$PROJECT_NAME:$IMAGE_TAG"
     
     # Create deployment
     cat <<EOF | kubectl apply -f -
@@ -227,7 +276,7 @@ spec:
       targetPort: 8080
 EOF
 
-    echo -e "${GREEN}✓ Deployed to EKS${NC}"
+    echo -e "${GREEN}✓ Deployed to GKE${NC}"
     echo ""
 }
 
@@ -242,12 +291,12 @@ wait_for_deployment() {
     
     local attempts=0
     local max_attempts=30
-    local lb_hostname=""
+    local lb_ip=""
     
     while [ $attempts -lt $max_attempts ]; do
-        lb_hostname=$(kubectl get svc ${PROJECT_NAME}-service -n "$NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+        lb_ip=$(kubectl get svc ${PROJECT_NAME}-service -n "$NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
         
-        if [ -n "$lb_hostname" ]; then
+        if [ -n "$lb_ip" ]; then
             break
         fi
         
@@ -255,37 +304,39 @@ wait_for_deployment() {
         sleep 5
     done
     
-    if [ -z "$lb_hostname" ]; then
+    if [ -z "$lb_ip" ]; then
         echo -e "${YELLOW}LoadBalancer not ready yet. Check with: kubectl get svc ${PROJECT_NAME}-service -n $NAMESPACE${NC}"
     else
         echo -e "${GREEN}✓ LoadBalancer ready${NC}"
         echo ""
-        echo -e "${GREEN}Application URL:${NC} http://$lb_hostname/"
-        echo -e "${GREEN}API Endpoint:${NC}   http://$lb_hostname/api"
+        echo -e "${GREEN}Application URL:${NC} http://$lb_ip/"
+        echo -e "${GREEN}API Endpoint:${NC}   http://$lb_ip/api"
     fi
 }
 
 # Print outputs
 print_outputs() {
     echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${BLUE}║                 EKS Deployment Complete                    ║${NC}"
+    echo -e "${BLUE}║                 GKE Deployment Complete                    ║${NC}"
     echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
     echo ""
     
-    echo -e "${GREEN}ECR Repository:${NC}  $ECR_REPO"
+    echo -e "${GREEN}GCP Project:${NC}     $GCP_PROJECT"
+    echo -e "${GREEN}Registry:${NC}        $REGISTRY_URL"
     echo -e "${GREEN}Image Tag:${NC}       $IMAGE_TAG"
     echo -e "${GREEN}Namespace:${NC}       $NAMESPACE"
     echo ""
     
-    local lb_hostname=$(kubectl get svc ${PROJECT_NAME}-service -n "$NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "pending...")
+    local lb_ip=$(kubectl get svc ${PROJECT_NAME}-service -n "$NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "pending...")
     
-    echo -e "${GREEN}LoadBalancer:${NC}    $lb_hostname"
+    echo -e "${GREEN}LoadBalancer IP:${NC} $lb_ip"
     echo ""
     echo -e "${YELLOW}Test the deployment:${NC}"
-    echo "  curl http://$lb_hostname/api"
+    echo "  curl http://$lb_ip/api"
     echo ""
     echo -e "${YELLOW}Harness Configuration:${NC}"
-    echo "  ECR Connector Region: $AWS_REGION"
+    echo "  GCP Connector Project: $GCP_PROJECT"
+    echo "  Artifact Registry: $REGISTRY_URL"
     echo "  Image Path: $PROJECT_NAME"
     echo "  Namespace: $NAMESPACE"
     echo ""
@@ -309,17 +360,36 @@ print_outputs() {
     echo ""
 }
 
-# Destroy deployment
+# Destroy deployment (keeps cluster)
 destroy() {
-    echo -e "${YELLOW}Removing EKS deployment...${NC}"
+    echo -e "${YELLOW}Removing GKE deployment...${NC}"
+    
+    # Try to connect to cluster
+    gcloud container clusters get-credentials "$PROJECT_NAME" --region "$GCP_REGION" --project "$GCP_PROJECT" 2>/dev/null || true
     
     kubectl delete deployment ${PROJECT_NAME}-deployment -n "$NAMESPACE" --ignore-not-found
     kubectl delete service ${PROJECT_NAME}-service -n "$NAMESPACE" --ignore-not-found
     
-    echo -e "${GREEN}✓ EKS deployment removed${NC}"
+    echo -e "${GREEN}✓ GKE deployment removed${NC}"
     echo ""
-    echo -e "${YELLOW}Note: ECR repository not deleted. To delete:${NC}"
-    echo "  aws ecr delete-repository --repository-name $PROJECT_NAME --region $AWS_REGION --force"
+    echo -e "${YELLOW}Note: GKE cluster and Artifact Registry not deleted.${NC}"
+    echo "To destroy everything: ./deploy-gke.sh destroy-all"
+}
+
+# Destroy all infrastructure
+destroy_all() {
+    echo -e "${YELLOW}Destroying all GKE infrastructure...${NC}"
+    
+    # Remove K8s resources first
+    destroy 2>/dev/null || true
+    
+    # Destroy Terraform resources
+    cd "$SCRIPT_DIR/infra/terraform-gke"
+    if [ -d ".terraform" ]; then
+        terraform destroy -auto-approve -input=false
+    fi
+    
+    echo -e "${GREEN}✓ All GKE resources destroyed${NC}"
 }
 
 # Main
@@ -328,12 +398,35 @@ case "${1:-}" in
         usage
         ;;
     destroy)
+        check_prereqs
         destroy
+        ;;
+    destroy-all)
+        check_prereqs
+        destroy_all
+        ;;
+    infra)
+        echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${BLUE}║              GKE Infrastructure Setup                      ║${NC}"
+        echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+        echo -e "${GREEN}Project:${NC}     $PROJECT_NAME"
+        echo -e "${GREEN}GCP Project:${NC} $GCP_PROJECT"
+        echo -e "${GREEN}Region:${NC}      $GCP_REGION"
+        echo ""
+        
+        check_prereqs
+        deploy_infrastructure
+        
+        echo -e "${GREEN}✓ GKE cluster ready${NC}"
+        echo ""
+        echo -e "${YELLOW}Next: Deploy the app with:${NC}"
+        echo "  ./deploy-gke.sh deploy"
         ;;
     build)
         IMAGE_TAG="${2:-latest}"
         echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║                 EKS Build Script                           ║${NC}"
+        echo -e "${BLUE}║                 GKE Build Script                           ║${NC}"
         echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
         echo ""
         echo -e "${GREEN}Project:${NC}     $PROJECT_NAME"
@@ -341,16 +434,16 @@ case "${1:-}" in
         echo ""
         
         check_prereqs
-        ensure_ecr_repo
+        ensure_registry
         build_app
         build_and_push_image
         
-        echo -e "${GREEN}✓ Image ready: $ECR_REPO:$IMAGE_TAG${NC}"
+        echo -e "${GREEN}✓ Image ready: $REGISTRY_URL/$PROJECT_NAME:$IMAGE_TAG${NC}"
         ;;
     deploy)
         IMAGE_TAG="${2:-latest}"
         echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║                 EKS Deploy Script                          ║${NC}"
+        echo -e "${BLUE}║                 GKE Deploy Script                          ║${NC}"
         echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
         echo ""
         echo -e "${GREEN}Project:${NC}     $PROJECT_NAME"
@@ -359,28 +452,31 @@ case "${1:-}" in
         echo ""
         
         check_prereqs
-        ensure_ecr_repo
-        deploy_to_eks
+        check_kubectl
+        get_registry_url
+        deploy_to_gke
         wait_for_deployment
         print_outputs
         ;;
     *)
         echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║                 EKS Deployment Script                      ║${NC}"
+        echo -e "${BLUE}║                 GKE Deployment Script                      ║${NC}"
         echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
         echo ""
         echo -e "${GREEN}Project:${NC}     $PROJECT_NAME"
         echo -e "${GREEN}Owner:${NC}       $OWNER"
-        echo -e "${GREEN}Region:${NC}      $AWS_REGION"
+        echo -e "${GREEN}GCP Project:${NC} $GCP_PROJECT"
+        echo -e "${GREEN}Region:${NC}      $GCP_REGION"
         echo -e "${GREEN}Namespace:${NC}   $NAMESPACE"
         echo -e "${GREEN}Image Tag:${NC}   $IMAGE_TAG"
         echo ""
         
         check_prereqs
-        ensure_ecr_repo
+        check_kubectl
+        ensure_registry
         build_app
         build_and_push_image
-        deploy_to_eks
+        deploy_to_gke
         wait_for_deployment
         print_outputs
         ;;

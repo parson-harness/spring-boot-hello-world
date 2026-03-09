@@ -1,22 +1,45 @@
-# Harness Platform Configuration
+# =============================================================================
+# HARNESS ACCOUNT CONFIGURATION
+# =============================================================================
+# Where to find: URL bar shows app.harness.io/ng/account/<ACCOUNT_ID>/...
 harness_account_id = "your-account-id"
+
+# Where to find: My Profile (bottom left) → API Keys → + Token → Copy
 harness_api_key    = "pat.your-api-key-here"
 
-# Organization and Project
+# Where to find: Organization Settings → Overview → Identifier
 org_identifier     = "default"
+
+# Where to find: Project Settings → Overview → Identifier
 project_identifier = "spring_boot_pov"
 create_project     = false  # Set to true to create a new project
 
-# Environment
-environment = "dev"
-aws_region  = "us-east-1"
-
-# AWS Configuration
-aws_account_id = "123456789012"  # Your AWS account ID
-project_name   = "tr-hello-world"  # Must match PROJECT_NAME used in deploy scripts
-
-# Delegate Configuration
+# =============================================================================
+# DELEGATE CONFIGURATION
+# =============================================================================
+# Where to find: Project Settings → Delegates → look at Tags column
 delegate_selectors = ["harness-delegate"]
+
+# =============================================================================
+# GITHUB CONFIGURATION
+# =============================================================================
+# Where to find: Project/Account Settings → Connectors → find your GitHub connector
+github_connector_ref = "account.github"
+
+# Your fork of this repo (e.g., "myorg/spring-boot-hello-world")
+github_repo          = "your-org/spring-boot-hello-world"
+
+# =============================================================================
+# AWS CONFIGURATION
+# =============================================================================
+# Where to find: Run `aws sts get-caller-identity` or check AWS Console
+aws_account_id = "123456789012"
+
+# Must match PROJECT_NAME in your .env file (set by setup-pov.sh)
+project_name   = "pov-hello-world"
+
+aws_region  = "us-east-1"
+environment = "dev"
 
 # AWS Connector Type
 # - "irsa": Use delegate's IAM role (recommended for EKS delegates)
@@ -27,20 +50,19 @@ aws_connector_type = "irsa"
 # aws_access_key_secret_ref = "account.aws_access_key"
 # aws_secret_key_secret_ref = "account.aws_secret_key"
 
-# GitHub Configuration (for manifest storage)
-github_connector_ref = "account.github"
-github_repo          = "your-org/spring-boot-hello-world"
-
-# Deployment Types to Enable
+# =============================================================================
+# DEPLOYMENT TYPES TO ENABLE
+# =============================================================================
 enable_asg    = true
 enable_lambda = true
-enable_eks    = true
+enable_eks    = false  # Set true if you have an EKS cluster
 
 # Kubernetes Configuration (only if enable_eks = true)
 k8s_namespace = "default"
 
-# ASG Infrastructure Values (from AWS Terraform outputs)
-# Run: cd ../terraform && terraform output
-# Leave empty to use runtime inputs in Harness
-asg_security_group_id = ""  # e.g., "sg-01420f751396ce5d6"
-asg_subnet_ids        = ""  # e.g., "subnet-abc123,subnet-def456"
+# =============================================================================
+# ASG INFRASTRUCTURE VALUES (auto-populated by update-harness-tfvars.sh)
+# =============================================================================
+# Leave empty - these are filled in automatically after running deploy-asg.sh
+asg_security_group_id = ""
+asg_subnet_ids        = ""

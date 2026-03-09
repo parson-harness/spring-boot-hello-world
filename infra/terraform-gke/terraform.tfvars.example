@@ -1,0 +1,45 @@
+# =============================================================================
+# GCP CONFIGURATION (REQUIRED)
+# =============================================================================
+# Where to find: GCP Console → Project selector dropdown shows project ID
+gcp_project_id = "your-gcp-project-id"
+
+# GCP region for the cluster
+gcp_region = "us-central1"
+
+# Optional: Set a specific zone for a zonal cluster (cheaper, less HA)
+# Leave empty for a regional cluster (more HA, costs more)
+gcp_zone = ""
+
+# =============================================================================
+# PROJECT CONFIGURATION
+# =============================================================================
+# Must match PROJECT_NAME in your .env file
+project_name = "pov-hello-world"
+
+environment = "dev"
+owner       = "yourname"
+
+# =============================================================================
+# CLUSTER CONFIGURATION
+# =============================================================================
+# Machine type (e2-medium is good for demos, e2-standard-2 for more capacity)
+machine_type = "e2-medium"
+
+# Node counts
+node_count     = 1   # Initial nodes per zone
+min_node_count = 1   # Minimum for autoscaling
+max_node_count = 3   # Maximum for autoscaling
+
+# Disk size in GB
+disk_size_gb = 50
+
+# Use preemptible (spot) VMs for cost savings (recommended for POVs)
+preemptible = true
+
+# =============================================================================
+# NETWORK CONFIGURATION (usually don't need to change)
+# =============================================================================
+subnet_cidr   = "10.0.0.0/24"
+pods_cidr     = "10.1.0.0/16"
+services_cidr = "10.2.0.0/20"

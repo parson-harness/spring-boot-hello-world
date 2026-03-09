@@ -1,0 +1,39 @@
+# =============================================================================
+# GCP CONFIGURATION (REQUIRED)
+# =============================================================================
+# Where to find: GCP Console → Project selector dropdown shows project ID
+gcp_project_id = "your-gcp-project-id"
+
+# GCP region for Cloud Run (choose one close to your users)
+# Cloud Run regions: https://cloud.google.com/run/docs/locations
+gcp_region = "us-central1"
+
+# =============================================================================
+# PROJECT CONFIGURATION
+# =============================================================================
+# Must match PROJECT_NAME in your .env file
+project_name = "pov-hello-world"
+
+environment = "dev"
+owner       = "yourname"
+
+# =============================================================================
+# CLOUD RUN CONFIGURATION
+# =============================================================================
+# Set to false on first run (before image exists in registry)
+# After pushing an image, set to true and re-apply
+create_service = false
+
+# Image tag to deploy (Harness will manage this during deployments)
+image_tag = "latest"
+
+# Resource allocation
+cpu    = "1"       # 1 or 2 CPUs
+memory = "512Mi"   # 512Mi, 1Gi, 2Gi, etc.
+
+# Scaling
+min_instances = 0   # 0 allows scale-to-zero (cost savings)
+max_instances = 10  # Max concurrent instances
+
+# Access control (true for POV/demo, false for production)
+allow_unauthenticated = true

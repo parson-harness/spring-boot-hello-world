@@ -127,7 +127,7 @@ fi
 echo ""
 echo -e "${YELLOW}Clearing local Terraform state for fresh POV...${NC}"
 rm -rf "$SCRIPT_DIR/infra/terraform-lambda/.terraform" "$SCRIPT_DIR/infra/terraform-lambda/terraform.tfstate"* 2>/dev/null || true
-rm -rf "$SCRIPT_DIR/infra/terraform/.terraform" "$SCRIPT_DIR/infra/terraform/terraform.tfstate"* 2>/dev/null || true
+rm -rf "$SCRIPT_DIR/infra/terraform-asg/.terraform" "$SCRIPT_DIR/infra/terraform-asg/terraform.tfstate"* 2>/dev/null || true
 rm -rf "$SCRIPT_DIR/infra/terraform-eks/.terraform" "$SCRIPT_DIR/infra/terraform-eks/terraform.tfstate"* 2>/dev/null || true
 rm -rf "$SCRIPT_DIR/infra/terraform-harness/.terraform" "$SCRIPT_DIR/infra/terraform-harness/terraform.tfstate"* 2>/dev/null || true
 echo -e "${GREEN}✓ Local state cleared${NC}"

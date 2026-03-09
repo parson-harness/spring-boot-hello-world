@@ -1,0 +1,257 @@
+pipeline:
+  name: Terraform Provision Cloud Run
+  identifier: terraform_provision_cloudrun
+  projectIdentifier: <+input>
+  orgIdentifier: <+input>
+  description: |
+    Provisions Google Cloud Run infrastructure using Terraform.
+    - Creates Artifact Registry for container images
+    - Creates Cloud Run service with public access
+    - Configures IAM and service accounts
+    
+    Prerequisites:
+    - GCP connector configured in Harness
+    - Delegate with GCP access (Workload Identity or SA Key)
+  tags:
+    type: infrastructure
+    cloud: gcp
+    tool: terraform
+  properties:
+    ci:
+      codebase:
+        connectorRef: <+input>
+        repoName: spring-boot-hello-world
+        build: <+input>
+  stages:
+    - stage:
+        name: Terraform Plan
+        identifier: terraform_plan
+        description: Run terraform plan to preview changes
+        type: Custom
+        spec:
+          execution:
+            steps:
+              - step:
+                  name: Terraform Init
+                  identifier: terraform_init
+                  type: ShellScript
+                  timeout: 10m
+                  spec:
+                    shell: Bash
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          cd infra/terraform-cloudrun
+                          
+                          echo "=== Terraform Init ==="
+                          terraform init \
+                            -backend-config="bucket=<+pipeline.variables.tf_state_bucket>" \
+                            -backend-config="prefix=terraform/state/<+pipeline.variables.environment>/cloudrun"
+                          
+                          echo "=== Terraform Validate ==="
+                          terraform validate
+                    environmentVariables:
+                      - name: GOOGLE_PROJECT
+                        type: String
+                        value: <+pipeline.variables.gcp_project>
+                    outputVariables: []
+              - step:
+                  name: Terraform Plan
+                  identifier: terraform_plan_step
+                  type: ShellScript
+                  timeout: 10m
+                  spec:
+                    shell: Bash
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          cd infra/terraform-cloudrun
+                          
+                          echo "=== Creating tfvars ==="
+                          cat > terraform.tfvars <<EOF
+                          gcp_project_id        = "<+pipeline.variables.gcp_project>"
+                          gcp_region            = "<+pipeline.variables.gcp_region>"
+                          project_name          = "<+pipeline.variables.project_name>"
+                          environment           = "<+pipeline.variables.environment>"
+                          owner                 = "<+pipeline.variables.owner>"
+                          create_service        = <+pipeline.variables.create_service>
+                          image_tag             = "<+pipeline.variables.image_tag>"
+                          cpu                   = "<+pipeline.variables.cpu>"
+                          memory                = "<+pipeline.variables.memory>"
+                          min_instances         = <+pipeline.variables.min_instances>
+                          max_instances         = <+pipeline.variables.max_instances>
+                          allow_unauthenticated = <+pipeline.variables.allow_unauthenticated>
+                          EOF
+                          
+                          echo "=== Terraform Plan ==="
+                          terraform plan -out=tfplan -input=false
+                          
+                          echo "=== Plan Summary ==="
+                          terraform show -no-color tfplan
+                    environmentVariables:
+                      - name: GOOGLE_PROJECT
+                        type: String
+                        value: <+pipeline.variables.gcp_project>
+                    outputVariables: []
+        tags: {}
+    - stage:
+        name: Approval
+        identifier: approval
+        description: Review terraform plan before applying
+        type: Approval
+        spec:
+          execution:
+            steps:
+              - step:
+                  name: Approve Terraform Apply
+                  identifier: approve_apply
+                  type: HarnessApproval
+                  timeout: 1d
+                  spec:
+                    approvalMessage: |
+                      Terraform plan completed for Cloud Run infrastructure.
+                      
+                      Project: <+pipeline.variables.gcp_project>
+                      Region: <+pipeline.variables.gcp_region>
+                      Service: <+pipeline.variables.project_name>
+                      Environment: <+pipeline.variables.environment>
+                      
+                      Review the plan output in the previous stage before approving.
+                    includePipelineExecutionHistory: true
+                    approvers:
+                      userGroups:
+                        - _project_all_users
+                      minimumCount: 1
+                      disallowPipelineExecutor: false
+        tags: {}
+    - stage:
+        name: Terraform Apply
+        identifier: terraform_apply
+        description: Apply terraform changes
+        type: Custom
+        spec:
+          execution:
+            steps:
+              - step:
+                  name: Terraform Apply
+                  identifier: terraform_apply_step
+                  type: ShellScript
+                  timeout: 20m
+                  spec:
+                    shell: Bash
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          cd infra/terraform-cloudrun
+                          
+                          echo "=== Terraform Init ==="
+                          terraform init \
+                            -backend-config="bucket=<+pipeline.variables.tf_state_bucket>" \
+                            -backend-config="prefix=terraform/state/<+pipeline.variables.environment>/cloudrun"
+                          
+                          echo "=== Recreating tfvars ==="
+                          cat > terraform.tfvars <<EOF
+                          gcp_project_id        = "<+pipeline.variables.gcp_project>"
+                          gcp_region            = "<+pipeline.variables.gcp_region>"
+                          project_name          = "<+pipeline.variables.project_name>"
+                          environment           = "<+pipeline.variables.environment>"
+                          owner                 = "<+pipeline.variables.owner>"
+                          create_service        = <+pipeline.variables.create_service>
+                          image_tag             = "<+pipeline.variables.image_tag>"
+                          cpu                   = "<+pipeline.variables.cpu>"
+                          memory                = "<+pipeline.variables.memory>"
+                          min_instances         = <+pipeline.variables.min_instances>
+                          max_instances         = <+pipeline.variables.max_instances>
+                          allow_unauthenticated = <+pipeline.variables.allow_unauthenticated>
+                          EOF
+                          
+                          echo "=== Terraform Apply ==="
+                          terraform apply -auto-approve -input=false
+                          
+                          echo "=== Outputs ==="
+                          echo "Artifact Registry: $(terraform output -raw artifact_registry_url)"
+                          echo "Service URL: $(terraform output -raw service_url)"
+                          echo ""
+                          echo "Docker push command:"
+                          terraform output -raw docker_push_command
+                    environmentVariables:
+                      - name: GOOGLE_PROJECT
+                        type: String
+                        value: <+pipeline.variables.gcp_project>
+                    outputVariables:
+                      - name: artifact_registry_url
+                        type: String
+                        value: artifact_registry_url
+                      - name: service_url
+                        type: String
+                        value: service_url
+        tags: {}
+  variables:
+    - name: gcp_project
+      type: String
+      description: GCP Project ID
+      required: true
+      value: <+input>
+    - name: gcp_region
+      type: String
+      description: GCP Region
+      required: true
+      value: <+input>.default(us-central1)
+    - name: tf_state_bucket
+      type: String
+      description: GCS bucket for Terraform state
+      required: true
+      value: <+input>
+    - name: project_name
+      type: String
+      description: Name for the Cloud Run service
+      required: true
+      value: <+input>.default(spring-boot-hello-world)
+    - name: environment
+      type: String
+      description: Environment name (dev, staging, prod)
+      required: true
+      value: <+input>.default(dev)
+    - name: owner
+      type: String
+      description: Owner name for resource tagging
+      required: true
+      value: <+input>
+    - name: create_service
+      type: String
+      description: Create Cloud Run service (false on first run before image exists)
+      required: false
+      value: <+input>.default(false)
+    - name: image_tag
+      type: String
+      description: Container image tag
+      required: false
+      value: <+input>.default(latest)
+    - name: cpu
+      type: String
+      description: CPU allocation (1 or 2)
+      required: false
+      value: <+input>.default(1)
+    - name: memory
+      type: String
+      description: Memory allocation (512Mi, 1Gi, etc.)
+      required: false
+      value: <+input>.default(512Mi)
+    - name: min_instances
+      type: Number
+      description: Minimum instances (0 for scale-to-zero)
+      required: false
+      value: <+input>.default(0)
+    - name: max_instances
+      type: Number
+      description: Maximum instances
+      required: false
+      value: <+input>.default(10)
+    - name: allow_unauthenticated
+      type: String
+      description: Allow public access (true/false)
+      required: false
+      value: <+input>.default(true)

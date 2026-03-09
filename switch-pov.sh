@@ -65,7 +65,7 @@ switch_pov() {
     # Step 3: Clear local Terraform state to prevent cross-POV contamination
     echo -e "${YELLOW}Clearing local Terraform state...${NC}"
     rm -rf "$SCRIPT_DIR/infra/terraform-lambda/.terraform" 2>/dev/null || true
-    rm -rf "$SCRIPT_DIR/infra/terraform/.terraform" 2>/dev/null || true
+    rm -rf "$SCRIPT_DIR/infra/terraform-asg/.terraform" 2>/dev/null || true
     rm -rf "$SCRIPT_DIR/infra/terraform-eks/.terraform" 2>/dev/null || true
     rm -rf "$SCRIPT_DIR/infra/terraform-harness/.terraform" 2>/dev/null || true
     echo -e "${GREEN}✓ Local .terraform directories cleared${NC}"

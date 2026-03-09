@@ -1,0 +1,218 @@
+pipeline:
+  name: Terraform Provision Lambda
+  identifier: terraform_provision_lambda
+  projectIdentifier: <+input>
+  orgIdentifier: <+input>
+  description: |
+    Provisions AWS Lambda infrastructure using Terraform.
+    - Creates ECR repository for container images
+    - Creates Lambda function with Function URL
+    - Configures IAM roles and permissions
+    - Sets up CloudWatch logging
+    
+    Prerequisites:
+    - AWS connector configured in Harness
+    - Delegate with AWS access (IRSA or Access Key)
+  tags:
+    type: infrastructure
+    cloud: aws
+    tool: terraform
+  properties:
+    ci:
+      codebase:
+        connectorRef: <+input>
+        repoName: spring-boot-hello-world
+        build: <+input>
+  stages:
+    - stage:
+        name: Terraform Plan
+        identifier: terraform_plan
+        description: Run terraform plan to preview changes
+        type: Custom
+        spec:
+          execution:
+            steps:
+              - step:
+                  name: Terraform Init
+                  identifier: terraform_init
+                  type: ShellScript
+                  timeout: 10m
+                  spec:
+                    shell: Bash
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          cd infra/terraform-lambda
+                          
+                          echo "=== Creating backend config ==="
+                          cat > backend.hcl <<EOF
+                          bucket         = "<+pipeline.variables.tf_state_bucket>"
+                          key            = "terraform/<+pipeline.variables.environment>/lambda.tfstate"
+                          region         = "<+pipeline.variables.aws_region>"
+                          dynamodb_table = "<+pipeline.variables.tf_lock_table>"
+                          encrypt        = true
+                          EOF
+                          
+                          echo "=== Terraform Init ==="
+                          terraform init -backend-config=backend.hcl
+                          
+                          echo "=== Terraform Validate ==="
+                          terraform validate
+                    environmentVariables:
+                      - name: AWS_REGION
+                        type: String
+                        value: <+pipeline.variables.aws_region>
+                    outputVariables: []
+              - step:
+                  name: Terraform Plan
+                  identifier: terraform_plan_step
+                  type: ShellScript
+                  timeout: 10m
+                  spec:
+                    shell: Bash
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          cd infra/terraform-lambda
+                          
+                          echo "=== Creating tfvars ==="
+                          cat > terraform.tfvars <<EOF
+                          aws_region   = "<+pipeline.variables.aws_region>"
+                          project_name = "<+pipeline.variables.project_name>"
+                          environment  = "<+pipeline.variables.environment>"
+                          owner        = "<+pipeline.variables.owner>"
+                          EOF
+                          
+                          echo "=== Terraform Plan ==="
+                          terraform plan -out=tfplan -input=false
+                          
+                          echo "=== Plan Summary ==="
+                          terraform show -no-color tfplan
+                    environmentVariables:
+                      - name: AWS_REGION
+                        type: String
+                        value: <+pipeline.variables.aws_region>
+                    outputVariables: []
+        tags: {}
+    - stage:
+        name: Approval
+        identifier: approval
+        description: Review terraform plan before applying
+        type: Approval
+        spec:
+          execution:
+            steps:
+              - step:
+                  name: Approve Terraform Apply
+                  identifier: approve_apply
+                  type: HarnessApproval
+                  timeout: 1d
+                  spec:
+                    approvalMessage: |
+                      Terraform plan completed for Lambda infrastructure.
+                      
+                      Region: <+pipeline.variables.aws_region>
+                      Project: <+pipeline.variables.project_name>
+                      Environment: <+pipeline.variables.environment>
+                      
+                      Review the plan output in the previous stage before approving.
+                    includePipelineExecutionHistory: true
+                    approvers:
+                      userGroups:
+                        - _project_all_users
+                      minimumCount: 1
+                      disallowPipelineExecutor: false
+        tags: {}
+    - stage:
+        name: Terraform Apply
+        identifier: terraform_apply
+        description: Apply terraform changes
+        type: Custom
+        spec:
+          execution:
+            steps:
+              - step:
+                  name: Terraform Apply
+                  identifier: terraform_apply_step
+                  type: ShellScript
+                  timeout: 20m
+                  spec:
+                    shell: Bash
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          cd infra/terraform-lambda
+                          
+                          echo "=== Creating backend config ==="
+                          cat > backend.hcl <<EOF
+                          bucket         = "<+pipeline.variables.tf_state_bucket>"
+                          key            = "terraform/<+pipeline.variables.environment>/lambda.tfstate"
+                          region         = "<+pipeline.variables.aws_region>"
+                          dynamodb_table = "<+pipeline.variables.tf_lock_table>"
+                          encrypt        = true
+                          EOF
+                          
+                          echo "=== Terraform Init ==="
+                          terraform init -backend-config=backend.hcl
+                          
+                          echo "=== Recreating tfvars ==="
+                          cat > terraform.tfvars <<EOF
+                          aws_region   = "<+pipeline.variables.aws_region>"
+                          project_name = "<+pipeline.variables.project_name>"
+                          environment  = "<+pipeline.variables.environment>"
+                          owner        = "<+pipeline.variables.owner>"
+                          EOF
+                          
+                          echo "=== Terraform Apply ==="
+                          terraform apply -auto-approve -input=false
+                          
+                          echo "=== Outputs ==="
+                          echo "ECR Repository: $(terraform output -raw ecr_repository_url)"
+                          echo "Lambda Function: $(terraform output -raw lambda_function_name)"
+                          echo "Function URL: $(terraform output -raw lambda_function_url)"
+                    environmentVariables:
+                      - name: AWS_REGION
+                        type: String
+                        value: <+pipeline.variables.aws_region>
+                    outputVariables:
+                      - name: ecr_repository_url
+                        type: String
+                        value: ecr_repository_url
+                      - name: lambda_function_url
+                        type: String
+                        value: lambda_function_url
+        tags: {}
+  variables:
+    - name: aws_region
+      type: String
+      description: AWS Region
+      required: true
+      value: <+input>.default(us-east-1)
+    - name: tf_state_bucket
+      type: String
+      description: S3 bucket for Terraform state
+      required: true
+      value: <+input>
+    - name: tf_lock_table
+      type: String
+      description: DynamoDB table for state locking
+      required: true
+      value: <+input>
+    - name: project_name
+      type: String
+      description: Name for Lambda and related resources
+      required: true
+      value: <+input>.default(spring-boot-hello-world)
+    - name: environment
+      type: String
+      description: Environment name (dev, staging, prod)
+      required: true
+      value: <+input>.default(dev)
+    - name: owner
+      type: String
+      description: Owner name for resource tagging
+      required: true
+      value: <+input>

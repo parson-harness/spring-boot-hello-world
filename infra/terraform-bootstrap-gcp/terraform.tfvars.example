@@ -1,0 +1,18 @@
+# =============================================================================
+# GCP CONFIGURATION (REQUIRED)
+# =============================================================================
+# Your GCP project ID
+gcp_project_id = "your-gcp-project-id"
+
+# Region for the state bucket (choose one close to your work)
+gcp_region = "us-central1"
+
+# =============================================================================
+# PROJECT CONFIGURATION
+# =============================================================================
+# Name for your POV (used in bucket naming)
+# Bucket will be named: {project_id}-{project_name}-tfstate
+project_name = "harness-pov"
+
+# Environment label
+environment = "pov"

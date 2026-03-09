@@ -1,276 +1,180 @@
 # Spring Boot Hello World
 
-A sample Java application built with Spring Boot, with multiple AWS deployment options and Harness CD support.
-
-> **📚 SE Quick Start**: See [docs/SE-QUICKSTART.md](docs/SE-QUICKSTART.md) for step-by-step instructions on deploying and configuring Harness for POVs.
+A sample Spring Boot app for demonstrating Harness CD deployments (ASG Blue-Green, Lambda Canary, EKS, GKE, Cloud Run).
 
 ---
 
-## 🎯 Deployment Models
-
-| Model | Script | Harness Strategy | Best For |
-|-------|--------|------------------|----------|
-| **ASG Blue-Green** | `./deploy-asg.sh` | Blue-Green with traffic shifting | Traditional EC2 workloads |
-| **Lambda** | `./deploy-lambda.sh` | Canary with alias routing | Event-driven, variable traffic |
-| **EKS/Kubernetes** | `./deploy-eks.sh` | Canary, Blue-Green, Rolling | Container workloads |
-
----
-
-## ⚡️ What you get
-
-- Spring Boot 2.7.x (Java 11) web app
-- Clean landing page at `/` (static `index.html`)
-- JSON API at `/api` and health at `/health`
-- Swagger UI at `/swagger-ui.html`
-- Build & commit metadata at `/actuator/info`
-- **AWS Infrastructure** (Terraform): VPC, ALB, ASG, Lambda, ECR
-- **Harness CD**: ASG Blue-Green and Lambda Canary deployments
-- Kubernetes manifests (Deployment + Service) ready for EKS
-- Docker image that runs on Linux/amd64
-
----
-
-## 🚀 Quick Start (AWS ASG Deployment)
-
-For a complete AWS ASG deployment with Harness Blue-Green support:
+## Quick Start
 
 ```bash
-# Run the deploy script (uses default project name)
-./deploy-asg.sh
+# 1. Setup your POV
+./setup-pov.sh
+# Enter POV name (e.g., "acme", "customer-name")
 
-# Or use a custom project name for your POV
-PROJECT_NAME=acme-demo ./deploy-asg.sh
+# 2. Edit Harness config with YOUR account details
+vi infra/terraform-harness/terraform.tfvars.<pov-name>
+
+# 3. Source environment and deploy AWS infrastructure
+source .env.<pov-name>
+./deploy-lambda.sh deploy   # Fast: ~2-3 min (recommended for demos)
+# OR
+./deploy-asg.sh deploy      # Full: ~8-12 min
+
+# 4. Setup Harness entities
+./setup-harness.sh <pov-name>
+
+# 5. Run pipeline in Harness UI
 ```
 
-This will:
-1. Build the application JAR
-2. Deploy Terraform state backend (S3 + DynamoDB)
-3. Deploy AWS infrastructure (VPC, ALB, ASG, S3)
-4. Build AMI with Packer (app baked in)
-5. Auto-populate Harness manifests with infrastructure values
-6. Output the ALB DNS and Harness configuration values
+---
 
-See [infra/README.md](infra/README.md) for detailed infrastructure documentation.
+## Deployment Options
 
-### 🍴 Forking for Your POV
+| Option | Script | Time | Best For |
+|--------|--------|------|----------|
+| **Lambda Canary** | `./deploy-lambda.sh deploy` | ~3 min | Quick demos, serverless (AWS) |
+| **Cloud Run** | `./deploy-cloudrun.sh deploy` | ~3 min | Quick demos, serverless (GCP) |
+| **ASG Blue-Green** | `./deploy-asg.sh deploy` | ~10 min | EC2 workloads, ALB traffic shifting (AWS) |
+| **EKS Kubernetes** | `./deploy-eks.sh deploy` | ~5 min | Container workloads (AWS, requires cluster) |
+| **GKE Kubernetes** | `./deploy-gke.sh deploy` | ~5 min | Container workloads (GCP, requires cluster) |
 
-When you fork this repo for a customer POV:
+---
+
+## Prerequisites
+
+**Tools:**
+- AWS CLI configured (`aws sso login`) - for AWS deployments
+- GCP CLI configured (`gcloud auth login`) - for GCP deployments (GKE, Cloud Run)
+- Docker, Terraform, Maven installed
+- Packer (for ASG only)
+
+**Harness Account Info** (collect before starting):
+
+| Item | Where to Find | Example |
+|------|---------------|---------|
+| **Account ID** | URL: `app.harness.io/ng/account/<ACCOUNT_ID>/...` | `EeRjnXTnS4GrLG5VNNJZUw` |
+| **API Key (PAT)** | My Profile → API Keys → Create Token | `pat.xxx.xxx.xxx` |
+| **Org Identifier** | Organization Settings → Overview | `default` or `sandbox` |
+| **Project Identifier** | Project Settings → Overview | `my_project` |
+| **Delegate Selector** | Project Settings → Delegates → Tags column | `my-delegate` |
+| **GitHub Connector** | Project/Account Settings → Connectors | `account.github` |
+| **GitHub Repo** | Your fork of this repo | `your-org/spring-boot-hello-world` |
+
+---
+
+## Switching POVs
 
 ```bash
-# 1. Fork the repo
-# 2. Clone your fork
-git clone https://github.com/YOUR-ORG/spring-boot-hello-world.git
-cd spring-boot-hello-world
-
-# 3. Deploy with your name and a unique project name
-PROJECT_NAME=acme-demo OWNER=smith ./deploy-asg.sh
-
-# 4. Commit the auto-generated configs
-git add infra/harness/asg/*.json harness-config.txt
-git commit -m "Configure for acme-demo"
-git push
+./switch-pov.sh <pov-name>
+source .env.<pov-name>
 ```
 
-| Variable | Purpose |
-|----------|---------|
-| `PROJECT_NAME` | Unique prefix for all AWS resources (ALB, ASG, etc.) |
-| `OWNER` | Your last name - tagged on all AWS resources for easy identification |
-
-All AWS resources will be tagged with `Owner=smith` so you can easily find and clean up your resources in the AWS Console.
-
 ---
 
-## 🧰 Prereqs
-
-- JDK 11
-- Maven 3.8+
-- Terraform >= 1.0
-- Packer >= 1.8
-- AWS CLI configured with appropriate credentials
-- Docker (with `buildx`) - for Kubernetes deployment
-- kubectl connected to a cluster (EKS or compatible) - for Kubernetes deployment
-
----
-
-## 🚀 Build & Run Locally
+## Cleanup
 
 ```bash
-# build jar
+./deploy-lambda.sh destroy
+./deploy-asg.sh destroy
+./deploy-eks.sh destroy
+```
+
+---
+
+<details>
+<summary><b>About the Application</b></summary>
+
+### Endpoints
+- `GET /` → Landing page
+- `GET /api` → Sample JSON response
+- `GET /health` → Health check
+- `GET /swagger-ui.html` → API docs
+
+### Run Locally
+```bash
 mvn clean package -DskipTests
-
-# run app
 java -jar target/spring-boot-hello-world-1.0-SNAPSHOT.jar
-
-# open in browser
 open http://localhost:8080/
 ```
 
-Endpoints:
-- `GET /` → landing page
-- `GET /api` → sample JSON
-- `GET /health` → health JSON
-- `GET /swagger-ui.html` → API docs
-- `GET /actuator/info` → build & commit metadata
+### Tech Stack
+- Spring Boot 2.7.x (Java 11)
+- Maven build
+- Docker container support
 
----
+</details>
 
-## ☁️ AWS ASG Deployment
-
-### Manual Deployment
-
-```bash
-# 1. Build the application
-mvn clean package -DskipTests
-
-# 2. Deploy Terraform state backend
-cd infra/terraform-bootstrap
-terraform init && terraform apply
-
-# 3. Deploy main infrastructure
-cd ../terraform
-terraform init && terraform apply
-
-# 4. Upload JAR to S3
-aws s3 cp ../../target/spring-boot-hello-world-1.0-SNAPSHOT.jar s3://$(terraform output -raw s3_bucket_name)/
-
-# 5. Access the application
-echo "App URL: http://$(terraform output -raw alb_dns_name)"
-```
-
-### Harness Blue-Green Deployment
-
-The infrastructure supports Harness ASG Blue-Green deployment with traffic shifting:
-- Two target groups (prod + stage) for weighted traffic distribution
-- Listener rule supporting incremental traffic shifts
-- Sample pipeline with 10% → 50% → 100% traffic progression
-
-See [infra/README.md](infra/README.md) for Harness setup instructions.
-
----
-
-## 🐳 Build & Push Docker Image
-
-The runtime image expects the fat jar to be present (built with the command above). The Dockerfile copies the jar and runs `java -jar`.
-
-```bash
-# build & push for EKS (linux/amd64)
-docker buildx build   --platform linux/amd64   -t parsontodd/spring-boot-hello-world:latest   --push .
-```
-
-> Tip: If you're using a private registry, make sure your cluster has the right imagePullSecret.
-
----
-
-## ☸️ Deploy to Kubernetes (EKS)
-
-```bash
-# namespace (templated)
-kubectl get ns dev >/dev/null 2>&1 || kubectl create ns dev
-
-# apply manifests
-kubectl apply -f kubernetes/service.yml
-kubectl apply -f kubernetes/deployment.yml
-
-# watch rollout
-kubectl rollout status deploy/spring-boot-hello-world -n dev
-
-# get external endpoint
-kubectl get svc spring-boot-hello-world-svc -n dev
-```
-
-When the `EXTERNAL-IP` is ready, open:
-```
-http://<EXTERNAL-IP>/
-```
-
-If you’re in a cluster without external LoadBalancers, port-forward instead:
-```bash
-kubectl port-forward svc/spring-boot-hello-world-svc 8080:80 -n dev
-# then visit http://localhost:8080/
-```
-
----
-
-## 🔁 Fast Dev Loop
-
-This repo ships with `:latest` and `imagePullPolicy: Always`, so you don’t need to edit YAML on each build. After pushing a new image, just restart the deployment:
-
-```bash
-docker buildx build --platform linux/amd64 -t parsontodd/spring-boot-hello-world:latest --push .
-
-kubectl rollout restart deploy/spring-boot-hello-world -n dev
-kubectl rollout status deploy/spring-boot-hello-world -n dev
-```
-
----
-
-## ⚙️ Configuration
-
-`src/main/resources/application.properties`:
-```properties
-server.port=8080
-management.endpoints.web.exposure.include=health,info
-management.info.git.mode=full
-info.app.name=springboothelloworld
-info.app.description=A sample Java application built with Spring Boot
-```
-
-Env vars used by the container (set in the Deployment):
-- `JAVA_OPTS` → JVM container tuning (defaults to `-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0`)
-- `POD_NAME`, `POD_NAMESPACE` → auto-injected via Downward API (used in the sample response)
-
----
-
-## 🧪 Tests
-
-```bash
-mvn test
-```
-
-`AppTest` includes:
-- Spring context load smoke test
-- `/api` JSON contract
-- `/health` contract
-
----
-
-## 📦 Project Layout
+<details>
+<summary><b>Project Structure</b></summary>
 
 ```
 spring-boot-hello-world/
-├─ src/                              # Application source code
-│  ├─ main/
-│  │  ├─ java/com/harness/springboothelloworld/
-│  │  │  ├─ App.java
-│  │  │  └─ HelloController.java
-│  │  └─ resources/
-│  │     └─ static/
-│  │        └─ index.html
-│  └─ test/
-│     └─ java/com/harness/springboothelloworld/AppTest.java
-├─ infra/                            # Infrastructure as Code
-│  ├─ terraform-bootstrap/           # Terraform state backend (S3 + DynamoDB)
-│  ├─ terraform/                     # Main AWS infrastructure (VPC, ALB, ASG)
-│  ├─ harness/
-│  │  ├─ asg/                        # Harness ASG Blue-Green configs
-│  │  └─ service/                    # Harness Kubernetes service configs
-│  └─ kubernetes/                    # Kubernetes manifests
-├─ setup.sh                          # One-command deployment script
-├─ Dockerfile
-└─ pom.xml
+├── src/                          # Application source
+├── infra/
+│   ├── terraform/                # ASG infrastructure (VPC, ALB, ASG)
+│   ├── terraform-lambda/         # Lambda infrastructure (ECR, Lambda)
+│   ├── terraform-harness/        # Harness entities (services, pipelines)
+│   └── harness/                  # Harness manifest templates
+├── setup-pov.sh                  # Initialize new POV
+├── setup-harness.sh              # Apply Harness Terraform
+├── deploy-lambda.sh              # Lambda deployment
+├── deploy-asg.sh                 # ASG deployment
+└── deploy-eks.sh                 # EKS deployment
 ```
 
+</details>
+
+<details>
+<summary><b>Manual Harness Setup (Alternative to Terraform)</b></summary>
+
+If you prefer to configure Harness manually instead of using `setup-harness.sh`:
+
+### Lambda
+1. **Connector**: AWS connector with ECR access
+2. **Service**: AWS Lambda type, ECR artifact
+3. **Infrastructure**: Lambda, your region
+4. **Pipeline**: Canary deployment strategy
+
+### ASG
+1. **Connector**: AWS connector with EC2/ASG/ALB access
+2. **Service**: ASG type, AMI artifact
+3. **Infrastructure**: ASG, your region
+4. **Pipeline**: Blue-Green with traffic shifting
+
+See `infra/terraform-harness/` for the Terraform that automates this.
+
+</details>
+
+<details>
+<summary><b>Troubleshooting</b></summary>
+
+| Issue | Solution |
+|-------|----------|
+| AWS credentials expired | `aws sso login` |
+| Harness config not set | Edit `terraform.tfvars.<pov-name>` with your account details |
+| Lambda cold start slow | First invocation takes 5-15s, subsequent calls are fast |
+| ASG instances unhealthy | Check security group allows ALB → port 8080 |
+| AMI not found in Harness | Verify `Application` tag matches your `PROJECT_NAME` |
+
+</details>
+
+<details>
+<summary><b>Demo Flow Examples</b></summary>
+
+### Lambda Canary Demo (~5 min)
+1. Show app at Function URL
+2. Make code change, push new image: `./deploy-lambda.sh v2.0 push`
+3. Run Harness pipeline → watch canary traffic shift
+4. Show instant rollback capability
+
+### ASG Blue-Green Demo (~10 min)
+1. Show app at ALB URL
+2. Build new AMI: `./build-ami.sh v2.0`
+3. Run Harness pipeline → watch traffic shift 10% → 50% → 100%
+4. Show ALB target groups in AWS console
+
+</details>
+
 ---
 
-## 🧭 Troubleshooting
-
-- **Image pulls but pod crashes** → check `kubectl logs` and verify the jar path is `/app/app.jar` inside the image.
-- **`exec format error`** on startup → your image arch doesn’t match node arch. Build with `--platform linux/amd64` for EKS x86 nodes.
-- **`/` shows Whitelabel error** → ensure `src/main/resources/static/index.html` exists in the jar (`jar tf target/*.jar | grep BOOT-INF/classes/static/index.html`).
-- **Changes don’t show up** → you pushed `:latest` but Pods reused the cached image. Use `imagePullPolicy: Always` (already set) and `kubectl rollout restart`.
-
----
-
-## 📝 License
-
-© todd.parson@harness.io. For demo/PoV purposes.
+**Questions?** See `infra/terraform-harness/README.md` for Harness Terraform details.

@@ -37,7 +37,7 @@ echo -e "${BLUE}╚════════════════════�
 echo ""
 
 # Get values from AWS Terraform
-cd "$SCRIPT_DIR/infra/terraform"
+cd "$SCRIPT_DIR/infra/terraform-asg"
 
 # Initialize if needed
 if [ ! -d ".terraform" ]; then
