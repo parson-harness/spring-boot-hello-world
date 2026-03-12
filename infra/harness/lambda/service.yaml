@@ -10,12 +10,12 @@ service:
           type: String
           description: Lambda function name
           required: true
-          value: spring-boot-hello-world
+          value: <+serviceVariables.function_name>
         - name: lambda_role_arn
           type: String
           description: IAM role ARN for Lambda execution
           required: true
-          value: arn:aws:iam::759984737373:role/spring-boot-hello-world-lambda-role
+          value: <+serviceVariables.lambda_role_arn>
       manifests:
         - manifest:
             identifier: lambdaFunctionDefinition
