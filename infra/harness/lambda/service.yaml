@@ -5,6 +5,17 @@ service:
   serviceDefinition:
     type: AwsLambda
     spec:
+      variables:
+        - name: function_name
+          type: String
+          description: Lambda function name
+          required: true
+          value: spring-boot-hello-world
+        - name: lambda_role_arn
+          type: String
+          description: IAM role ARN for Lambda execution
+          required: true
+          value: arn:aws:iam::759984737373:role/spring-boot-hello-world-lambda-role
       manifests:
         - manifest:
             identifier: lambdaFunctionDefinition
@@ -14,7 +25,7 @@ service:
                 type: Harness
                 spec:
                   files:
-                    - /infra/harness/lambda/function-definition.yaml
+                    - /infra/harness/lambda/function-definition.json
         - manifest:
             identifier: lambdaFunctionAliasDefinition
             type: AwsLambdaFunctionAliasDefinition
@@ -23,7 +34,7 @@ service:
                 type: Harness
                 spec:
                   files:
-                    - /infra/harness/lambda/alias-definition.yaml
+                    - /infra/harness/lambda/alias-definition.json
       artifacts:
         primary:
           primaryArtifactRef: <+input>
